@@ -1,103 +1,124 @@
 // src/utils/rules.js
 
-// HÀM HỖ TRỢ: Lấy quân cờ tại vị trí (x, y)
-// Trả về object quân cờ nếu có, hoặc undefined nếu không có
 const getPieceAt = (x, y, pieces) => {
   return pieces.find(p => p.x === x && p.y === y);
 };
 
-// HÀM HỖ TRỢ QUAN TRỌNG: Đếm số vật cản trên đường đi thẳng
-// Trả về số lượng quân cờ nằm GIỮA điểm đi và điểm đến (không tính điểm đầu và cuối)
 const countObstacles = (x1, y1, x2, y2, pieces) => {
   let count = 0;
-
-  // 1. Nếu đi theo chiều dọc (cùng X)
   if (x1 === x2) {
     const min = Math.min(y1, y2);
     const max = Math.max(y1, y2);
-    // Duyệt qua các ô nằm giữa
     for (let y = min + 1; y < max; y++) {
-      if (getPieceAt(x1, y, pieces)) {
-        count++;
-      }
+      if (getPieceAt(x1, y, pieces)) count++;
     }
-  } 
-  // 2. Nếu đi theo chiều ngang (cùng Y)
-  else if (y1 === y2) {
+  } else if (y1 === y2) {
     const min = Math.min(x1, x2);
     const max = Math.max(x1, x2);
-    // Duyệt qua các ô nằm giữa
     for (let x = min + 1; x < max; x++) {
-      if (getPieceAt(x, y1, pieces)) {
-        count++;
-      }
+      if (getPieceAt(x, y1, pieces)) count++;
     }
   }
-
   return count;
 };
 
-// --- LUẬT CỦA TỪNG QUÂN ---
-
-// 1. LUẬT QUÂN XE (ROOK)
-// - Đi thẳng (ngang hoặc dọc).
-// - Không có vật cản ở giữa (count == 0).
+// --- CÁC LUẬT CŨ (XE, PHÁO) ---
 const validateRook = (px, py, tx, ty, pieces) => {
-  // Xe phải đi thẳng: hoặc x bằng nhau, hoặc y bằng nhau
   if (px !== tx && py !== ty) return false;
-
-  // Đếm vật cản
-  const obstacles = countObstacles(px, py, tx, ty, pieces);
-  
-  // Xe chỉ đi được nếu không có vật cản (obstacles === 0)
-  return obstacles === 0;
+  return countObstacles(px, py, tx, ty, pieces) === 0;
 };
 
-// 2. LUẬT QUÂN PHÁO (CANNON)
-// - Đi thẳng.
-// - Nếu đi nước thường (không ăn): Không vật cản (count == 0).
-// - Nếu ăn quân: Phải có ĐÚNG 1 vật cản (count == 1).
 const validateCannon = (px, py, tx, ty, pieces) => {
-  // Pháo cũng phải đi thẳng
   if (px !== tx && py !== ty) return false;
-
   const obstacles = countObstacles(px, py, tx, ty, pieces);
   const targetPiece = getPieceAt(tx, ty, pieces);
+  if (targetPiece) return obstacles === 1;
+  else return obstacles === 0;
+};
 
-  // Trường hợp 1: Ô đích có quân (Tức là hành động ĂN quân)
-  if (targetPiece) {
-    // Pháo muốn ăn phải nhảy qua đúng 1 quân (Ngòi)
-    return obstacles === 1;
-  } 
-  
-  // Trường hợp 2: Ô đích trống (Di chuyển bình thường)
-  else {
-    // Pháo đi thường giống Xe, không được có vật cản nào
-    return obstacles === 0;
+// --- CÁC LUẬT MỚI (MÃ, TƯỢNG) ---
+
+// 3. LUẬT QUÂN MÃ (KNIGHT)
+// - Đi hình chữ L: |dx|=1 & |dy|=2 HOẶC |dx|=2 & |dy|=1
+// - Phải check "Cản chân" (Block)
+const validateKnight = (px, py, tx, ty, pieces) => {
+  const dx = Math.abs(tx - px);
+  const dy = Math.abs(ty - py);
+
+  // Trường hợp 1: Nhảy dọc (Đi dọc 2 ô, ngang 1 ô)
+  if (dx === 1 && dy === 2) {
+    // Chân Mã nằm ở ô phía trước theo chiều dọc
+    // Ví dụ: Từ (3,3) nhảy lên (4,5) thì chân ở (3,4)
+    // Tính tọa độ chân: Giữ nguyên x, y cộng thêm 1 hướng về phía đích
+    const blockY = py + (ty > py ? 1 : -1); 
+    const blockPiece = getPieceAt(px, blockY, pieces);
+    
+    // Nếu có quân ở chân -> Bị cản -> Không đi được
+    if (blockPiece) return false; 
+    
+    return true;
   }
+
+  // Trường hợp 2: Nhảy ngang (Đi ngang 2 ô, dọc 1 ô)
+  if (dx === 2 && dy === 1) {
+    // Chân Mã nằm ở ô bên cạnh theo chiều ngang
+    const blockX = px + (tx > px ? 1 : -1);
+    const blockPiece = getPieceAt(blockX, py, pieces);
+    
+    if (blockPiece) return false;
+
+    return true;
+  }
+
+  // Không phải hình chữ L
+  return false;
+};
+
+// 4. LUẬT QUÂN TƯỢNG (ELEPHANT)
+// - Đi chéo đúng 2 ô: |dx|=2 & |dy|=2
+// - Không được qua sông.
+// - Check "Cản mắt" (Block center).
+const validateElephant = (piece, tx, ty, pieces) => {
+  const { x: px, y: py, color } = piece;
+  const dx = Math.abs(tx - px);
+  const dy = Math.abs(ty - py);
+
+  // 1. Phải đi chéo đúng 2 ô
+  if (dx !== 2 || dy !== 2) return false;
+
+  // 2. Kiểm tra qua sông
+  // Sông nằm giữa y=4 và y=5.
+  // Đỏ (ở dưới) chỉ được đi y >= 5. Đen (ở trên) chỉ được đi y <= 4.
+  if (color === 'r' && ty < 5) return false; // Đỏ vượt rào
+  if (color === 'b' && ty > 4) return false; // Đen vượt rào
+
+  // 3. Kiểm tra cản mắt tượng (Điểm chính giữa)
+  // Tọa độ mắt tượng là trung bình cộng của đi và đến
+  const eyeX = (px + tx) / 2;
+  const eyeY = (py + ty) / 2;
+  
+  if (getPieceAt(eyeX, eyeY, pieces)) return false; // Có quân chặn mắt
+
+  return true;
 };
 
 
-// --- HÀM TỔNG HỢP: KIỂM TRA LUẬT CHUNG ---
-// Hàm này sẽ được App.jsx gọi để quyết định có cho đi hay không
+// --- HÀM TỔNG HỢP ---
 export const isValidMove = (piece, targetX, targetY, pieces) => {
-  // Lấy thông tin quân đang đi
   const { x, y, type } = piece;
-
-  // Nếu vị trí đích trùng vị trí hiện tại -> Không đi (tránh lỗi click nhầm)
   if (x === targetX && y === targetY) return false;
 
   switch (type) {
-    case 'r': // Xe (Rook)
-      return validateRook(x, y, targetX, targetY, pieces);
+    case 'r': return validateRook(x, y, targetX, targetY, pieces);
+    case 'c': return validateCannon(x, y, targetX, targetY, pieces);
     
-    case 'c': // Pháo (Cannon)
-      return validateCannon(x, y, targetX, targetY, pieces);
-    
-    // Các quân khác (Mã, Tượng, Sĩ, Tướng, Tốt) tạm thời chưa check
-    // Cho phép đi thoải mái (return true) để test game không bị tắc
-    // Chúng ta sẽ bổ sung dần ở các ngày tiếp theo
+    case 'n': // Mã (Knight)
+      return validateKnight(x, y, targetX, targetY, pieces);
+      
+    case 'b': // Tượng (Elephant/Bishop) - Lưu ý: trong code ta đặt type là 'b'
+      return validateElephant(piece, targetX, targetY, pieces);
+
     default:
-      return true; 
+      return true; // Sĩ, Tướng, Tốt vẫn đi tự do
   }
 };
