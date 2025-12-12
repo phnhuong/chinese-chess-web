@@ -1,17 +1,16 @@
 import React from 'react';
 
-// Nhận thêm props: onClick và isSelected
 const Piece = ({ piece, onClick, isSelected }) => {
   
-  const isRed = piece.color === 'red';
+  // SỬA LỖI Ở ĐÂY: So sánh với 'r' thay vì 'red'
+  const isRed = piece.color === 'r';
+  
   const colorClass = isRed ? 'text-[#d63031] border-[#d63031]' : 'text-[#2d3436] border-[#2d3436]';
   const bgClass = 'bg-[#fdf5e6]';
 
-  // --- XỬ LÝ HIỆU ỨNG CHỌN (HIGHLIGHT) ---
-  // Nếu được chọn: Thêm vòng sáng màu xanh dương (ring-4 ring-blue-500) và phóng to nhẹ
   const selectedClass = isSelected 
     ? 'ring-4 ring-blue-500 scale-110 z-30 shadow-xl' 
-    : 'hover:scale-110 z-20'; // Nếu chưa chọn thì chỉ hover mới to lên
+    : 'hover:scale-110 z-20';
 
   const style = {
     left: `${piece.x * 50}px`,
@@ -29,9 +28,7 @@ const Piece = ({ piece, onClick, isSelected }) => {
 
   return (
     <div 
-      // Thêm sự kiện onClick
       onClick={onClick}
-      // Thêm selectedClass vào className
       className={`absolute w-[40px] h-[40px] rounded-full border-2 flex justify-center items-center shadow-md cursor-pointer select-none transition-all duration-200 ${colorClass} ${bgClass} ${selectedClass}`}
       style={style}
     >
