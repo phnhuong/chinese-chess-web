@@ -7,16 +7,13 @@ const getPieceAt = (x, y, pieces) => {
 
 const countObstacles = (x1, y1, x2, y2, pieces) => {
   let count = 0;
-  // Đi dọc
   if (x1 === x2) {
     const min = Math.min(y1, y2);
     const max = Math.max(y1, y2);
     for (let y = min + 1; y < max; y++) {
       if (getPieceAt(x1, y, pieces)) count++;
     }
-  } 
-  // Đi ngang
-  else if (y1 === y2) {
+  } else if (y1 === y2) {
     const min = Math.min(x1, x2);
     const max = Math.max(x1, x2);
     for (let x = min + 1; x < max; x++) {
@@ -109,45 +106,28 @@ const validateSoldier = (piece, tx, ty) => {
   return true;
 };
 
-// --- LOGIC MỚI: KIỂM TRA LỘ MẶT TƯỚNG (FLYING GENERAL) ---
+// --- KIỂM TRA LỘ MẶT TƯỚNG ---
 const causesFlyingGeneral = (piece, targetX, targetY, currentPieces) => {
-  // 1. GIẢ LẬP NƯỚC ĐI: Tạo ra một bàn cờ ảo sau khi quân đã di chuyển
   const simPieces = currentPieces.map(p => {
-    // Di chuyển quân mình đến vị trí mới
-    if (p.id === piece.id) {
-      return { ...p, x: targetX, y: targetY };
-    }
+    if (p.id === piece.id) return { ...p, x: targetX, y: targetY };
     return p;
-  }).filter(p => {
-    // Nếu tại ô đích có quân địch (ăn quân), thì loại quân địch đó ra khỏi bàn cờ ảo
-    // Logic: Nếu quân p đang ở vị trí đích VÀ không phải là quân vừa di chuyển tới -> Bị ăn
-    return !(p.x === targetX && p.y === targetY && p.id !== piece.id);
-  });
+  }).filter(p => !(p.x === targetX && p.y === targetY && p.id !== piece.id));
 
-  // 2. TÌM VỊ TRÍ 2 TƯỚNG TRÊN BÀN CỜ ẢO
   const redKing = simPieces.find(p => p.type === 'k' && p.color === 'r');
   const blackKing = simPieces.find(p => p.type === 'k' && p.color === 'b');
 
-  // (Phòng hờ trường hợp không tìm thấy tướng - dù hiếm khi xảy ra)
   if (!redKing || !blackKing) return false;
+  if (redKing.x !== blackKing.x) return false; 
 
-  // 3. KIỂM TRA XEM CÓ CÙNG CỘT KHÔNG
-  if (redKing.x !== blackKing.x) return false; // Khác cột -> An toàn
-
-  // 4. ĐẾM SỐ VẬT CẢN Ở GIỮA
   const obstacles = countObstacles(redKing.x, redKing.y, blackKing.x, blackKing.y, simPieces);
-
-  // Nếu không có vật cản (obstacles === 0) -> Lộ mặt tướng -> Nước đi PHẠM LUẬT
   return obstacles === 0;
 };
 
-
-// --- HÀM TỔNG HỢP (Main Validator) ---
+// --- HÀM KIỂM TRA DI CHUYỂN HỢP LỆ (GỐC) ---
 export const isValidMove = (piece, targetX, targetY, pieces) => {
   const { x, y, type } = piece;
   if (x === targetX && y === targetY) return false;
 
-  // BƯỚC 1: Kiểm tra luật di chuyển cơ bản của từng quân
   let isBasicMoveValid = false;
   switch (type) {
     case 'r': isBasicMoveValid = validateRook(x, y, targetX, targetY, pieces); break;
@@ -160,15 +140,53 @@ export const isValidMove = (piece, targetX, targetY, pieces) => {
     default: isBasicMoveValid = true;
   }
 
-  // Nếu đi sai luật cơ bản (VD: Mã đi thẳng) -> Loại ngay
   if (!isBasicMoveValid) return false;
 
-  // BƯỚC 2: Kiểm tra luật "Lộ mặt tướng" (MỚI)
-  // Dù đi đúng luật cơ bản, nhưng nếu để hở mặt tướng -> Vẫn tính là Sai
   if (causesFlyingGeneral(piece, targetX, targetY, pieces)) {
-    console.log("Không được để lộ mặt tướng!");
     return false;
   }
 
   return true;
+};
+
+// --- KIỂM TRA CHIẾU TƯỚNG (CHECK) ---
+export const isCheck = (board, currentTurn) => {
+  const attackerColor = currentTurn;
+  const defenderColor = currentTurn === 'r' ? 'b' : 'r';
+
+  const defenderKing = board.find(p => p.type === 'k' && p.color === defenderColor);
+  if (!defenderKing) return false;
+
+  const attackers = board.filter(p => p.color === attackerColor);
+
+  for (let piece of attackers) {
+    if (isValidMove(piece, defenderKing.x, defenderKing.y, board)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+// --- HÀM MỚI (NGÀY 13): KIỂM TRA "TỰ LÀM MẤT TƯỚNG" ---
+// Trả về true nếu nước đi này khiến Tướng mình bị chiếu
+export const willCauseSelfCheck = (piece, targetX, targetY, currentPieces) => {
+  const myColor = piece.color;
+  const opponentColor = myColor === 'r' ? 'b' : 'r';
+
+  // 1. Giả lập nước đi
+  const simPieces = currentPieces
+    .filter(p => !(p.x === targetX && p.y === targetY)) // Loại bỏ quân bị ăn
+    .map(p => {
+      if (p.id === piece.id) {
+        return { ...p, x: targetX, y: targetY }; // Di chuyển quân mình
+      }
+      return p;
+    });
+
+  // 2. Kiểm tra trên bàn cờ giả lập: Đối phương có đang chiếu Tướng mình không?
+  if (isCheck(simPieces, opponentColor)) {
+    return true; // Nguy hiểm!
+  }
+
+  return false; // An toàn
 };

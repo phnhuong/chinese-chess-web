@@ -1,83 +1,89 @@
 import React, { useState } from 'react'
 import Board from './components/Board'
 import { initialBoardState } from './utils/initialState'
-// IMPORT HÀM KIỂM TRA LUẬT
-import { isValidMove } from './utils/rules'
+// IMPORT THÊM willCauseSelfCheck
+import { isValidMove, isCheck, willCauseSelfCheck } from './utils/rules'
 
 function App() {
   const [pieces, setPieces] = useState(initialBoardState);
   const [selectedPiece, setSelectedPiece] = useState(null);
-  
-  // Quản lý lượt đi: 'r' (Red) hoặc 'b' (Black)
-  const [turn, setTurn] = useState('r'); 
+  const [turn, setTurn] = useState('r');
+  const [message, setMessage] = useState(""); 
 
-  // --- LOGIC XỬ LÝ CLICK VÀO QUÂN CỜ (Chọn hoặc Ăn) ---
+  // Hàm cập nhật chung sau khi đi quân
+  const updateGameState = (newPieces, currentTurnPlaying) => {
+    setPieces(newPieces);
+    setSelectedPiece(null);
+    
+    const nextTurn = currentTurnPlaying === 'r' ? 'b' : 'r';
+    setTurn(nextTurn);
+
+    if (isCheck(newPieces, currentTurnPlaying)) {
+      setMessage(`⚠️ ${currentTurnPlaying === 'r' ? 'ĐỎ' : 'ĐEN'} ĐANG CHIẾU TƯỚNG!`);
+    } else {
+      setMessage("");
+    }
+  };
+
   const handlePieceClick = (targetPiece) => {
-    // TRƯỜNG HỢP 1: Chưa chọn quân nào cả
+    // 1. Chọn quân
     if (!selectedPiece) {
-      // Chỉ được chọn quân đúng lượt của mình
       if (targetPiece.color !== turn) return; 
       setSelectedPiece(targetPiece);
       return;
     }
 
-    // TRƯỜNG HỢP 2: Đã chọn quân rồi, giờ click vào quân khác
-    
-    // A. Nếu click lại vào chính nó -> Bỏ chọn
+    // 2. Bỏ chọn / Chọn lại
     if (targetPiece.id === selectedPiece.id) {
       setSelectedPiece(null);
       return;
     }
-
-    // B. Nếu click vào quân CÙNG MÀU -> Đổi sang chọn quân đó
     if (targetPiece.color === selectedPiece.color) {
-      // Vẫn phải kiểm tra lại xem có đúng lượt không
-      if (targetPiece.color === turn) {
-        setSelectedPiece(targetPiece);
-      }
+      if (targetPiece.color === turn) setSelectedPiece(targetPiece);
       return;
     }
 
-    // C. Nếu click vào quân KHÁC MÀU -> ĂN QUÂN (Capture) !!!
+    // 3. ĂN QUÂN (Capture)
     
-    // --- BƯỚC KIỂM TRA LUẬT (MỚI) ---
-    // Hỏi trọng tài xem nước ăn quân này có hợp lệ không?
+    // Check 1: Luật di chuyển cơ bản
     const canMove = isValidMove(selectedPiece, targetPiece.x, targetPiece.y, pieces);
-    if (!canMove) {
-        console.log("Nước ăn quân sai luật!");
-        return; // Nếu sai luật thì dừng lại, không làm gì cả
-    }
-    // --------------------------------
+    if (!canMove) return;
 
-    // Nếu đúng luật thì thực hiện ăn quân:
+    // Check 2: (MỚI) Không được đi nước làm Tướng mình bị chiếu
+    if (willCauseSelfCheck(selectedPiece, targetPiece.x, targetPiece.y, pieces)) {
+        console.log("Không được! Nước đi này khiến Tướng bị chiếu.");
+        // Bạn có thể thêm thông báo UI ở đây nếu thích
+        return; 
+    }
+
+    // Thực hiện ăn quân
     const newPieces = pieces
-      .filter(p => p.id !== targetPiece.id) // 1. Xóa quân bị ăn
+      .filter(p => p.id !== targetPiece.id)
       .map(p => {
         if (p.id === selectedPiece.id) {
-          return { ...p, x: targetPiece.x, y: targetPiece.y }; // 2. Di chuyển quân mình
+          return { ...p, x: targetPiece.x, y: targetPiece.y };
         }
         return p;
       });
     
-    setPieces(newPieces);
-    setSelectedPiece(null);
-    setTurn(turn === 'r' ? 'b' : 'r'); // 3. Đổi lượt
+    updateGameState(newPieces, turn);
   };
 
-  // --- LOGIC XỬ LÝ CLICK VÀO Ô TRỐNG (Di chuyển) ---
   const handleSquareClick = (x, y) => {
+    // DI CHUYỂN (Move)
     if (!selectedPiece) return;
 
-    // --- BƯỚC KIỂM TRA LUẬT (MỚI) ---
-    // Hỏi trọng tài xem nước di chuyển này có hợp lệ không?
+    // Check 1: Luật di chuyển cơ bản
     const canMove = isValidMove(selectedPiece, x, y, pieces);
-    if (!canMove) {
-        console.log("Nước di chuyển sai luật!");
-        return; // Dừng lại
-    }
-    // --------------------------------
+    if (!canMove) return;
 
-    // Nếu đúng luật thì thực hiện di chuyển:
+    // Check 2: (MỚI) Không được đi nước làm Tướng mình bị chiếu
+    if (willCauseSelfCheck(selectedPiece, x, y, pieces)) {
+        console.log("Không được! Nước đi này khiến Tướng bị chiếu.");
+        return;
+    }
+
+    // Thực hiện di chuyển
     const newPieces = pieces.map(p => {
       if (p.id === selectedPiece.id) {
         return { ...p, x: x, y: y };
@@ -85,24 +91,27 @@ function App() {
       return p;
     });
 
-    setPieces(newPieces);
-    setSelectedPiece(null);
-    setTurn(turn === 'r' ? 'b' : 'r'); // Đổi lượt
+    updateGameState(newPieces, turn);
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-800 font-sans">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-800 font-sans relative">
       <h1 className="text-4xl font-bold text-yellow-500 mb-4 tracking-widest drop-shadow-md">
         KỲ VƯƠNG ONLINE
       </h1>
 
-      {/* HIỂN THỊ LƯỢT ĐI */}
       <div className="mb-6 px-6 py-2 rounded-full bg-slate-700 border border-slate-600 flex items-center gap-3 shadow-lg">
         <span className="text-gray-300 text-lg">Lượt đi:</span>
         <span className={`font-bold text-xl px-4 py-1 rounded ${turn === 'r' ? 'bg-red-600 text-white' : 'bg-black text-white border border-gray-500'}`}>
           {turn === 'r' ? 'QUÂN ĐỎ' : 'QUÂN ĐEN'}
         </span>
       </div>
+
+      {message && (
+        <div className="absolute top-24 bg-red-600 text-white px-8 py-3 rounded-lg shadow-2xl animate-bounce font-bold border-4 border-yellow-400 z-50 text-xl tracking-wider">
+          {message}
+        </div>
+      )}
       
       <Board 
         pieces={pieces} 
@@ -112,7 +121,7 @@ function App() {
       />
       
       <p className="mt-6 text-gray-500 text-sm italic">
-        Ngày 8: Luật Xe và Pháo (Check vật cản)
+        Ngày 13: Chặn nước đi tự sát (Self-Check Prevention)
       </p>
     </div>
   )
