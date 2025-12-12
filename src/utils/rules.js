@@ -1,19 +1,19 @@
 // src/utils/rules.js
 
-// --- HÀM HỖ TRỢ CƠ BẢN ---
+// --- 1. HÀM HỖ TRỢ CƠ BẢN ---
 const getPieceAt = (x, y, pieces) => {
   return pieces.find(p => p.x === x && p.y === y);
 };
 
 const countObstacles = (x1, y1, x2, y2, pieces) => {
   let count = 0;
-  if (x1 === x2) {
+  if (x1 === x2) { // Dọc
     const min = Math.min(y1, y2);
     const max = Math.max(y1, y2);
     for (let y = min + 1; y < max; y++) {
       if (getPieceAt(x1, y, pieces)) count++;
     }
-  } else if (y1 === y2) {
+  } else if (y1 === y2) { // Ngang
     const min = Math.min(x1, x2);
     const max = Math.max(x1, x2);
     for (let x = min + 1; x < max; x++) {
@@ -30,7 +30,7 @@ const isInPalace = (x, y, color) => {
   return false;
 };
 
-// --- CÁC LUẬT DI CHUYỂN CƠ BẢN ---
+// --- 2. LUẬT DI CHUYỂN TỪNG QUÂN ---
 const validateRook = (px, py, tx, ty, pieces) => {
   if (px !== tx && py !== ty) return false;
   return countObstacles(px, py, tx, ty, pieces) === 0;
@@ -106,7 +106,7 @@ const validateSoldier = (piece, tx, ty) => {
   return true;
 };
 
-// --- KIỂM TRA LỘ MẶT TƯỚNG ---
+// --- 3. KIỂM TRA LỘ MẶT TƯỚNG ---
 const causesFlyingGeneral = (piece, targetX, targetY, currentPieces) => {
   const simPieces = currentPieces.map(p => {
     if (p.id === piece.id) return { ...p, x: targetX, y: targetY };
@@ -123,11 +123,20 @@ const causesFlyingGeneral = (piece, targetX, targetY, currentPieces) => {
   return obstacles === 0;
 };
 
-// --- HÀM KIỂM TRA DI CHUYỂN HỢP LỆ (GỐC) ---
+// --- 4. HÀM KIỂM TRA HỢP LỆ (MAIN) ---
 export const isValidMove = (piece, targetX, targetY, pieces) => {
-  const { x, y, type } = piece;
+  const { x, y, type, color } = piece;
+  
+  // 1. Vị trí trùng
   if (x === targetX && y === targetY) return false;
 
+  // 2. [SỬA LỖI QUAN TRỌNG]: Không được ăn quân cùng màu
+  const targetPiece = getPieceAt(targetX, targetY, pieces);
+  if (targetPiece && targetPiece.color === color) {
+    return false;
+  }
+
+  // 3. Luật cơ bản
   let isBasicMoveValid = false;
   switch (type) {
     case 'r': isBasicMoveValid = validateRook(x, y, targetX, targetY, pieces); break;
@@ -142,14 +151,13 @@ export const isValidMove = (piece, targetX, targetY, pieces) => {
 
   if (!isBasicMoveValid) return false;
 
-  if (causesFlyingGeneral(piece, targetX, targetY, pieces)) {
-    return false;
-  }
+  // 4. Lộ mặt tướng
+  if (causesFlyingGeneral(piece, targetX, targetY, pieces)) return false;
 
   return true;
 };
 
-// --- KIỂM TRA CHIẾU TƯỚNG (CHECK) ---
+// --- 5. KIỂM TRA CHIẾU TƯỚNG ---
 export const isCheck = (board, currentTurn) => {
   const attackerColor = currentTurn;
   const defenderColor = currentTurn === 'r' ? 'b' : 'r';
@@ -167,26 +175,38 @@ export const isCheck = (board, currentTurn) => {
   return false;
 };
 
-// --- HÀM MỚI (NGÀY 13): KIỂM TRA "TỰ LÀM MẤT TƯỚNG" ---
-// Trả về true nếu nước đi này khiến Tướng mình bị chiếu
+// --- 6. KIỂM TRA TỰ LÀM MẤT TƯỚNG ---
 export const willCauseSelfCheck = (piece, targetX, targetY, currentPieces) => {
   const myColor = piece.color;
   const opponentColor = myColor === 'r' ? 'b' : 'r';
 
-  // 1. Giả lập nước đi
   const simPieces = currentPieces
-    .filter(p => !(p.x === targetX && p.y === targetY)) // Loại bỏ quân bị ăn
+    .filter(p => !(p.x === targetX && p.y === targetY))
     .map(p => {
-      if (p.id === piece.id) {
-        return { ...p, x: targetX, y: targetY }; // Di chuyển quân mình
-      }
+      if (p.id === piece.id) return { ...p, x: targetX, y: targetY };
       return p;
     });
 
-  // 2. Kiểm tra trên bàn cờ giả lập: Đối phương có đang chiếu Tướng mình không?
-  if (isCheck(simPieces, opponentColor)) {
-    return true; // Nguy hiểm!
-  }
+  if (isCheck(simPieces, opponentColor)) return true;
+  return false;
+};
 
-  return false; // An toàn
+// --- 7. KIỂM TRA HẾT CỜ ---
+export const isGameOver = (pieces, turn) => {
+  const myPieces = pieces.filter(p => p.color === turn);
+
+  for (let piece of myPieces) {
+    for (let x = 0; x < 9; x++) {
+      for (let y = 0; y < 10; y++) {
+        if (isValidMove(piece, x, y, pieces)) {
+          if (!willCauseSelfCheck(piece, x, y, pieces)) {
+            // Gợi ý nước đi cứu thua (chỉ để debug)
+            console.log(`>>> GỢI Ý CỨU THUA: Quân ${piece.type} (${piece.id}) -> (${x},${y})`);
+            return false;
+          }
+        }
+      }
+    }
+  }
+  return true;
 };

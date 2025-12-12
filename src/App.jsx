@@ -1,39 +1,60 @@
 import React, { useState } from 'react'
 import Board from './components/Board'
 import { initialBoardState } from './utils/initialState'
-// IMPORT THÊM willCauseSelfCheck
-import { isValidMove, isCheck, willCauseSelfCheck } from './utils/rules'
+// Import thêm isGameOver
+import { isValidMove, isCheck, willCauseSelfCheck, isGameOver } from './utils/rules'
 
 function App() {
   const [pieces, setPieces] = useState(initialBoardState);
   const [selectedPiece, setSelectedPiece] = useState(null);
   const [turn, setTurn] = useState('r');
   const [message, setMessage] = useState(""); 
+  
+  // STATE MỚI: NGƯỜI CHIẾN THẮNG
+  const [winner, setWinner] = useState(null); // 'r', 'b', hoặc null
 
-  // Hàm cập nhật chung sau khi đi quân
+  // Hàm reset game
+  const resetGame = () => {
+    setPieces(initialBoardState);
+    setTurn('r');
+    setWinner(null);
+    setMessage("");
+    setSelectedPiece(null);
+  };
+
   const updateGameState = (newPieces, currentTurnPlaying) => {
     setPieces(newPieces);
     setSelectedPiece(null);
     
+    // Xác định lượt tiếp theo
     const nextTurn = currentTurnPlaying === 'r' ? 'b' : 'r';
     setTurn(nextTurn);
 
-    if (isCheck(newPieces, currentTurnPlaying)) {
+    // 1. Kiểm tra Chiếu tướng
+    const isChecking = isCheck(newPieces, currentTurnPlaying);
+    if (isChecking) {
       setMessage(`⚠️ ${currentTurnPlaying === 'r' ? 'ĐỎ' : 'ĐEN'} ĐANG CHIẾU TƯỚNG!`);
     } else {
       setMessage("");
     }
+
+    // 2. KIỂM TRA HẾT CỜ (CHECKMATE) - Logic Ngày 14
+    // Kiểm tra phe "nextTurn" (người sắp phải đi) có còn nước đi nào không?
+    if (isGameOver(newPieces, nextTurn)) {
+      setWinner(currentTurnPlaying); // Người vừa đi là người thắng
+    }
   };
 
+  // --- Logic Click Quân ---
   const handlePieceClick = (targetPiece) => {
-    // 1. Chọn quân
+    if (winner) return; // Hết cờ thì không cho click nữa
+
     if (!selectedPiece) {
       if (targetPiece.color !== turn) return; 
       setSelectedPiece(targetPiece);
       return;
     }
 
-    // 2. Bỏ chọn / Chọn lại
     if (targetPiece.id === selectedPiece.id) {
       setSelectedPiece(null);
       return;
@@ -43,20 +64,11 @@ function App() {
       return;
     }
 
-    // 3. ĂN QUÂN (Capture)
-    
-    // Check 1: Luật di chuyển cơ bản
     const canMove = isValidMove(selectedPiece, targetPiece.x, targetPiece.y, pieces);
     if (!canMove) return;
 
-    // Check 2: (MỚI) Không được đi nước làm Tướng mình bị chiếu
-    if (willCauseSelfCheck(selectedPiece, targetPiece.x, targetPiece.y, pieces)) {
-        console.log("Không được! Nước đi này khiến Tướng bị chiếu.");
-        // Bạn có thể thêm thông báo UI ở đây nếu thích
-        return; 
-    }
+    if (willCauseSelfCheck(selectedPiece, targetPiece.x, targetPiece.y, pieces)) return;
 
-    // Thực hiện ăn quân
     const newPieces = pieces
       .filter(p => p.id !== targetPiece.id)
       .map(p => {
@@ -69,21 +81,16 @@ function App() {
     updateGameState(newPieces, turn);
   };
 
+  // --- Logic Click Ô Trống ---
   const handleSquareClick = (x, y) => {
-    // DI CHUYỂN (Move)
+    if (winner) return;
     if (!selectedPiece) return;
 
-    // Check 1: Luật di chuyển cơ bản
     const canMove = isValidMove(selectedPiece, x, y, pieces);
     if (!canMove) return;
 
-    // Check 2: (MỚI) Không được đi nước làm Tướng mình bị chiếu
-    if (willCauseSelfCheck(selectedPiece, x, y, pieces)) {
-        console.log("Không được! Nước đi này khiến Tướng bị chiếu.");
-        return;
-    }
+    if (willCauseSelfCheck(selectedPiece, x, y, pieces)) return;
 
-    // Thực hiện di chuyển
     const newPieces = pieces.map(p => {
       if (p.id === selectedPiece.id) {
         return { ...p, x: x, y: y };
@@ -107,9 +114,24 @@ function App() {
         </span>
       </div>
 
-      {message && (
+      {message && !winner && (
         <div className="absolute top-24 bg-red-600 text-white px-8 py-3 rounded-lg shadow-2xl animate-bounce font-bold border-4 border-yellow-400 z-50 text-xl tracking-wider">
           {message}
+        </div>
+      )}
+
+      {/* MÀN HÌNH CHIẾN THẮNG (Overlay) */}
+      {winner && (
+        <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-[100]">
+          <h2 className={`text-6xl font-bold mb-8 ${winner === 'r' ? 'text-red-500' : 'text-white'}`}>
+            {winner === 'r' ? 'ĐỎ THẮNG!' : 'ĐEN THẮNG!'}
+          </h2>
+          <button 
+            onClick={resetGame}
+            className="px-8 py-3 bg-yellow-500 text-black font-bold text-2xl rounded-lg hover:bg-yellow-400 transition-colors shadow-lg"
+          >
+            Ván Mới
+          </button>
         </div>
       )}
       
@@ -121,7 +143,7 @@ function App() {
       />
       
       <p className="mt-6 text-gray-500 text-sm italic">
-        Ngày 13: Chặn nước đi tự sát (Self-Check Prevention)
+        Ngày 14: Game Hoàn Thiện (Checkmate & Reset)
       </p>
     </div>
   )
