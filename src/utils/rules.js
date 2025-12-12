@@ -1,5 +1,6 @@
 // src/utils/rules.js
 
+// --- HÀM HỖ TRỢ ---
 const getPieceAt = (x, y, pieces) => {
   return pieces.find(p => p.x === x && p.y === y);
 };
@@ -22,7 +23,17 @@ const countObstacles = (x1, y1, x2, y2, pieces) => {
   return count;
 };
 
-// --- CÁC LUẬT CŨ (XE, PHÁO) ---
+// Hàm kiểm tra xem một tọa độ (x, y) có nằm trong Cung (Palace) hay không?
+// Cung Đỏ: x từ 3-5, y từ 7-9
+// Cung Đen: x từ 3-5, y từ 0-2
+const isInPalace = (x, y, color) => {
+  if (x < 3 || x > 5) return false; // X phải nằm giữa
+  if (color === 'r') return y >= 7 && y <= 9; // Cung Đỏ (Dưới)
+  if (color === 'b') return y >= 0 && y <= 2; // Cung Đen (Trên)
+  return false;
+};
+
+// --- CÁC LUẬT ĐÃ CÓ (XE, PHÁO, MÃ, TƯỢNG) ---
 const validateRook = (px, py, tx, ty, pieces) => {
   if (px !== tx && py !== ty) return false;
   return countObstacles(px, py, tx, ty, pieces) === 0;
@@ -36,68 +47,110 @@ const validateCannon = (px, py, tx, ty, pieces) => {
   else return obstacles === 0;
 };
 
-// --- CÁC LUẬT MỚI (MÃ, TƯỢNG) ---
-
-// 3. LUẬT QUÂN MÃ (KNIGHT)
-// - Đi hình chữ L: |dx|=1 & |dy|=2 HOẶC |dx|=2 & |dy|=1
-// - Phải check "Cản chân" (Block)
 const validateKnight = (px, py, tx, ty, pieces) => {
   const dx = Math.abs(tx - px);
   const dy = Math.abs(ty - py);
-
-  // Trường hợp 1: Nhảy dọc (Đi dọc 2 ô, ngang 1 ô)
   if (dx === 1 && dy === 2) {
-    // Chân Mã nằm ở ô phía trước theo chiều dọc
-    // Ví dụ: Từ (3,3) nhảy lên (4,5) thì chân ở (3,4)
-    // Tính tọa độ chân: Giữ nguyên x, y cộng thêm 1 hướng về phía đích
     const blockY = py + (ty > py ? 1 : -1); 
-    const blockPiece = getPieceAt(px, blockY, pieces);
-    
-    // Nếu có quân ở chân -> Bị cản -> Không đi được
-    if (blockPiece) return false; 
-    
+    if (getPieceAt(px, blockY, pieces)) return false; 
     return true;
   }
-
-  // Trường hợp 2: Nhảy ngang (Đi ngang 2 ô, dọc 1 ô)
   if (dx === 2 && dy === 1) {
-    // Chân Mã nằm ở ô bên cạnh theo chiều ngang
     const blockX = px + (tx > px ? 1 : -1);
-    const blockPiece = getPieceAt(blockX, py, pieces);
-    
-    if (blockPiece) return false;
-
+    if (getPieceAt(blockX, py, pieces)) return false;
     return true;
   }
-
-  // Không phải hình chữ L
   return false;
 };
 
-// 4. LUẬT QUÂN TƯỢNG (ELEPHANT)
-// - Đi chéo đúng 2 ô: |dx|=2 & |dy|=2
-// - Không được qua sông.
-// - Check "Cản mắt" (Block center).
 const validateElephant = (piece, tx, ty, pieces) => {
   const { x: px, y: py, color } = piece;
   const dx = Math.abs(tx - px);
   const dy = Math.abs(ty - py);
-
-  // 1. Phải đi chéo đúng 2 ô
   if (dx !== 2 || dy !== 2) return false;
-
-  // 2. Kiểm tra qua sông
-  // Sông nằm giữa y=4 và y=5.
-  // Đỏ (ở dưới) chỉ được đi y >= 5. Đen (ở trên) chỉ được đi y <= 4.
-  if (color === 'r' && ty < 5) return false; // Đỏ vượt rào
-  if (color === 'b' && ty > 4) return false; // Đen vượt rào
-
-  // 3. Kiểm tra cản mắt tượng (Điểm chính giữa)
-  // Tọa độ mắt tượng là trung bình cộng của đi và đến
+  if (color === 'r' && ty < 5) return false; 
+  if (color === 'b' && ty > 4) return false; 
   const eyeX = (px + tx) / 2;
   const eyeY = (py + ty) / 2;
-  
-  if (getPieceAt(eyeX, eyeY, pieces)) return false; // Có quân chặn mắt
+  if (getPieceAt(eyeX, eyeY, pieces)) return false; 
+  return true;
+};
+
+// --- CÁC LUẬT MỚI (SĨ, TƯỚNG, TỐT) ---
+
+// 5. LUẬT QUÂN SĨ (ADVISOR)
+// - Đi chéo 1 ô: |dx|=1 & |dy|=1
+// - Bắt buộc ở trong Cung
+const validateAdvisor = (piece, tx, ty) => {
+  const { x: px, y: py, color } = piece;
+  const dx = Math.abs(tx - px);
+  const dy = Math.abs(ty - py);
+
+  // Phải đi chéo 1 ô
+  if (dx !== 1 || dy !== 1) return false;
+
+  // Phải ở trong cung
+  if (!isInPalace(tx, ty, color)) return false;
+
+  return true;
+};
+
+// 6. LUẬT QUÂN TƯỚNG (GENERAL/KING)
+// - Đi ngang/dọc 1 ô: |dx| + |dy| = 1
+// - Bắt buộc ở trong Cung
+// - (Luật "Lộ mặt tướng" sẽ xử lý ở phần Check Game sau)
+const validateGeneral = (piece, tx, ty) => {
+  const { x: px, y: py, color } = piece;
+  const dx = Math.abs(tx - px);
+  const dy = Math.abs(ty - py);
+
+  // Phải đi ngang hoặc dọc 1 ô
+  if (dx + dy !== 1) return false;
+
+  // Phải ở trong cung
+  if (!isInPalace(tx, ty, color)) return false;
+
+  return true;
+};
+
+// 7. LUẬT QUÂN TỐT (SOLDIER/PAWN)
+// - Đi từng bước một.
+// - Không bao giờ đi lùi.
+// - Chưa qua sông: Chỉ đi thẳng.
+// - Đã qua sông: Đi thẳng hoặc đi ngang.
+const validateSoldier = (piece, tx, ty) => {
+  const { x: px, y: py, color } = piece;
+  const dx = Math.abs(tx - px);
+  const dy = Math.abs(ty - py);
+
+  // Chỉ được đi 1 ô mỗi lần
+  if (dx + dy !== 1) return false;
+
+  // Logic riêng cho từng màu
+  if (color === 'r') { // QUÂN ĐỎ (Đi từ dưới lên - y giảm)
+    // 1. Cấm đi lùi (tức là y tăng -> ty > py)
+    if (ty > py) return false;
+
+    // 2. Kiểm tra qua sông
+    // Sông ở giữa y=4 và y=5. Đỏ qua sông khi y <= 4.
+    if (py > 4) { 
+      // Chưa qua sông: Chỉ được đi thẳng (dx = 0), Cấm đi ngang
+      if (dx !== 0) return false;
+    } else {
+      // Đã qua sông: Được đi ngang, nhưng vẫn cấm đi lùi (đã check ở trên)
+      // Không cần check gì thêm
+    }
+  } else { // QUÂN ĐEN (Đi từ trên xuống - y tăng)
+    // 1. Cấm đi lùi (tức là y giảm -> ty < py)
+    if (ty < py) return false;
+
+    // 2. Kiểm tra qua sông
+    // Đen qua sông khi y >= 5.
+    if (py < 5) {
+      // Chưa qua sông: Chỉ đi thẳng
+      if (dx !== 0) return false;
+    }
+  }
 
   return true;
 };
@@ -111,14 +164,19 @@ export const isValidMove = (piece, targetX, targetY, pieces) => {
   switch (type) {
     case 'r': return validateRook(x, y, targetX, targetY, pieces);
     case 'c': return validateCannon(x, y, targetX, targetY, pieces);
+    case 'n': return validateKnight(x, y, targetX, targetY, pieces);
+    case 'b': return validateElephant(piece, targetX, targetY, pieces);
     
-    case 'n': // Mã (Knight)
-      return validateKnight(x, y, targetX, targetY, pieces);
+    case 'a': // Sĩ (Advisor)
+      return validateAdvisor(piece, targetX, targetY);
       
-    case 'b': // Tượng (Elephant/Bishop) - Lưu ý: trong code ta đặt type là 'b'
-      return validateElephant(piece, targetX, targetY, pieces);
+    case 'k': // Tướng (King/General)
+      return validateGeneral(piece, targetX, targetY);
+      
+    case 'p': // Tốt (Pawn)
+      return validateSoldier(piece, targetX, targetY);
 
     default:
-      return true; // Sĩ, Tướng, Tốt vẫn đi tự do
+      return true;
   }
 };
