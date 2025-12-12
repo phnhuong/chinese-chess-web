@@ -4,14 +4,44 @@ import { initialBoardState } from './utils/initialState'
 
 function App() {
   const [pieces, setPieces] = useState(initialBoardState);
-  
-  // 1. Thêm State để lưu quân cờ đang được chọn (ban đầu là null - chưa chọn gì)
   const [selectedPiece, setSelectedPiece] = useState(null);
 
-  // 2. Hàm xử lý khi click vào một quân cờ
+  // Xử lý khi click vào quân cờ
   const handlePieceClick = (piece) => {
-    console.log("Đã chọn quân:", piece.id); // In ra console để kiểm tra
+    // Nếu click vào chính quân đang chọn -> Bỏ chọn (Toggle)
+    if (selectedPiece && selectedPiece.id === piece.id) {
+        setSelectedPiece(null);
+        return;
+    }
+
+    // Nếu đang chọn quân A mà click quân B (cùng phe) -> Chuyển sang chọn B
+    if (selectedPiece && selectedPiece.color === piece.color) {
+        setSelectedPiece(piece);
+        return;
+    }
+    
+    // Logic ăn quân sẽ làm sau. Hiện tại cứ click là chọn.
     setSelectedPiece(piece);
+  };
+
+  // --- HÀM MỚI: Xử lý khi click vào ô trống (Di chuyển) ---
+  const handleSquareClick = (x, y) => {
+    // Nếu chưa chọn quân nào thì click vào ô trống vô nghĩa -> Thoát
+    if (!selectedPiece) return;
+
+    // Tìm quân cờ đang chọn trong danh sách và cập nhật x, y mới
+    const newPieces = pieces.map(p => {
+      if (p.id === selectedPiece.id) {
+        return { ...p, x: x, y: y }; // Tạo ra quân cờ mới với tọa độ mới
+      }
+      return p;
+    });
+
+    // Cập nhật lại State bàn cờ
+    setPieces(newPieces);
+    
+    // Sau khi đi xong thì bỏ chọn
+    setSelectedPiece(null);
   };
 
   return (
@@ -20,15 +50,15 @@ function App() {
         KỲ VƯƠNG ONLINE
       </h1>
       
-      {/* 3. Truyền hàm xử lý và thông tin quân đang chọn xuống Board */}
       <Board 
         pieces={pieces} 
         onPieceClick={handlePieceClick} 
+        onSquareClick={handleSquareClick} // Truyền hàm xử lý ô trống xuống
         selectedPiece={selectedPiece}
       />
       
       <p className="mt-6 text-gray-400 text-sm">
-        Ngày 4: Tương tác - Chọn quân (Highlight)
+        Ngày 5: Di chuyển tự do (Click quân -> Click ô trống)
       </p>
     </div>
   )
