@@ -1,12 +1,14 @@
 import React, { useState } from 'react'
 import Board from './components/Board'
 import { initialBoardState } from './utils/initialState'
+// IMPORT HÀM KIỂM TRA LUẬT
+import { isValidMove } from './utils/rules'
 
 function App() {
   const [pieces, setPieces] = useState(initialBoardState);
   const [selectedPiece, setSelectedPiece] = useState(null);
   
-  // 1. THÊM STATE QUẢN LÝ LƯỢT ĐI ('r' là Red đi trước)
+  // Quản lý lượt đi: 'r' (Red) hoặc 'b' (Black)
   const [turn, setTurn] = useState('r'); 
 
   // --- LOGIC XỬ LÝ CLICK VÀO QUÂN CỜ (Chọn hoặc Ăn) ---
@@ -29,7 +31,7 @@ function App() {
 
     // B. Nếu click vào quân CÙNG MÀU -> Đổi sang chọn quân đó
     if (targetPiece.color === selectedPiece.color) {
-      // Vẫn phải kiểm tra lại xem có đúng lượt không (phòng hờ)
+      // Vẫn phải kiểm tra lại xem có đúng lượt không
       if (targetPiece.color === turn) {
         setSelectedPiece(targetPiece);
       }
@@ -37,12 +39,22 @@ function App() {
     }
 
     // C. Nếu click vào quân KHÁC MÀU -> ĂN QUÂN (Capture) !!!
-    // Logic: Xóa quân bị ăn, cập nhật tọa độ quân ăn
+    
+    // --- BƯỚC KIỂM TRA LUẬT (MỚI) ---
+    // Hỏi trọng tài xem nước ăn quân này có hợp lệ không?
+    const canMove = isValidMove(selectedPiece, targetPiece.x, targetPiece.y, pieces);
+    if (!canMove) {
+        console.log("Nước ăn quân sai luật!");
+        return; // Nếu sai luật thì dừng lại, không làm gì cả
+    }
+    // --------------------------------
+
+    // Nếu đúng luật thì thực hiện ăn quân:
     const newPieces = pieces
-      .filter(p => p.id !== targetPiece.id) // 1. Lọc bỏ quân bị ăn khỏi mảng
+      .filter(p => p.id !== targetPiece.id) // 1. Xóa quân bị ăn
       .map(p => {
         if (p.id === selectedPiece.id) {
-          return { ...p, x: targetPiece.x, y: targetPiece.y }; // 2. Cập nhật vị trí mới cho quân mình
+          return { ...p, x: targetPiece.x, y: targetPiece.y }; // 2. Di chuyển quân mình
         }
         return p;
       });
@@ -56,7 +68,16 @@ function App() {
   const handleSquareClick = (x, y) => {
     if (!selectedPiece) return;
 
-    // Cập nhật vị trí
+    // --- BƯỚC KIỂM TRA LUẬT (MỚI) ---
+    // Hỏi trọng tài xem nước di chuyển này có hợp lệ không?
+    const canMove = isValidMove(selectedPiece, x, y, pieces);
+    if (!canMove) {
+        console.log("Nước di chuyển sai luật!");
+        return; // Dừng lại
+    }
+    // --------------------------------
+
+    // Nếu đúng luật thì thực hiện di chuyển:
     const newPieces = pieces.map(p => {
       if (p.id === selectedPiece.id) {
         return { ...p, x: x, y: y };
@@ -66,7 +87,7 @@ function App() {
 
     setPieces(newPieces);
     setSelectedPiece(null);
-    setTurn(turn === 'r' ? 'b' : 'r'); // Đổi lượt sau khi đi
+    setTurn(turn === 'r' ? 'b' : 'r'); // Đổi lượt
   };
 
   return (
@@ -91,7 +112,7 @@ function App() {
       />
       
       <p className="mt-6 text-gray-500 text-sm italic">
-        Ngày 6: Luật Ăn Quân & Phân Chia Lượt
+        Ngày 8: Luật Xe và Pháo (Check vật cản)
       </p>
     </div>
   )
