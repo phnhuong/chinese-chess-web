@@ -1,19 +1,22 @@
 // src/utils/rules.js
 
-// --- HÀM HỖ TRỢ ---
+// --- HÀM HỖ TRỢ CƠ BẢN ---
 const getPieceAt = (x, y, pieces) => {
   return pieces.find(p => p.x === x && p.y === y);
 };
 
 const countObstacles = (x1, y1, x2, y2, pieces) => {
   let count = 0;
+  // Đi dọc
   if (x1 === x2) {
     const min = Math.min(y1, y2);
     const max = Math.max(y1, y2);
     for (let y = min + 1; y < max; y++) {
       if (getPieceAt(x1, y, pieces)) count++;
     }
-  } else if (y1 === y2) {
+  } 
+  // Đi ngang
+  else if (y1 === y2) {
     const min = Math.min(x1, x2);
     const max = Math.max(x1, x2);
     for (let x = min + 1; x < max; x++) {
@@ -23,17 +26,14 @@ const countObstacles = (x1, y1, x2, y2, pieces) => {
   return count;
 };
 
-// Hàm kiểm tra xem một tọa độ (x, y) có nằm trong Cung (Palace) hay không?
-// Cung Đỏ: x từ 3-5, y từ 7-9
-// Cung Đen: x từ 3-5, y từ 0-2
 const isInPalace = (x, y, color) => {
-  if (x < 3 || x > 5) return false; // X phải nằm giữa
-  if (color === 'r') return y >= 7 && y <= 9; // Cung Đỏ (Dưới)
-  if (color === 'b') return y >= 0 && y <= 2; // Cung Đen (Trên)
+  if (x < 3 || x > 5) return false;
+  if (color === 'r') return y >= 7 && y <= 9;
+  if (color === 'b') return y >= 0 && y <= 2;
   return false;
 };
 
-// --- CÁC LUẬT ĐÃ CÓ (XE, PHÁO, MÃ, TƯỢNG) ---
+// --- CÁC LUẬT DI CHUYỂN CƠ BẢN ---
 const validateRook = (px, py, tx, ty, pieces) => {
   if (px !== tx && py !== ty) return false;
   return countObstacles(px, py, tx, ty, pieces) === 0;
@@ -76,107 +76,99 @@ const validateElephant = (piece, tx, ty, pieces) => {
   return true;
 };
 
-// --- CÁC LUẬT MỚI (SĨ, TƯỚNG, TỐT) ---
-
-// 5. LUẬT QUÂN SĨ (ADVISOR)
-// - Đi chéo 1 ô: |dx|=1 & |dy|=1
-// - Bắt buộc ở trong Cung
 const validateAdvisor = (piece, tx, ty) => {
   const { x: px, y: py, color } = piece;
   const dx = Math.abs(tx - px);
   const dy = Math.abs(ty - py);
-
-  // Phải đi chéo 1 ô
   if (dx !== 1 || dy !== 1) return false;
-
-  // Phải ở trong cung
   if (!isInPalace(tx, ty, color)) return false;
-
   return true;
 };
 
-// 6. LUẬT QUÂN TƯỚNG (GENERAL/KING)
-// - Đi ngang/dọc 1 ô: |dx| + |dy| = 1
-// - Bắt buộc ở trong Cung
-// - (Luật "Lộ mặt tướng" sẽ xử lý ở phần Check Game sau)
 const validateGeneral = (piece, tx, ty) => {
   const { x: px, y: py, color } = piece;
   const dx = Math.abs(tx - px);
   const dy = Math.abs(ty - py);
-
-  // Phải đi ngang hoặc dọc 1 ô
   if (dx + dy !== 1) return false;
-
-  // Phải ở trong cung
   if (!isInPalace(tx, ty, color)) return false;
-
   return true;
 };
 
-// 7. LUẬT QUÂN TỐT (SOLDIER/PAWN)
-// - Đi từng bước một.
-// - Không bao giờ đi lùi.
-// - Chưa qua sông: Chỉ đi thẳng.
-// - Đã qua sông: Đi thẳng hoặc đi ngang.
 const validateSoldier = (piece, tx, ty) => {
   const { x: px, y: py, color } = piece;
   const dx = Math.abs(tx - px);
   const dy = Math.abs(ty - py);
-
-  // Chỉ được đi 1 ô mỗi lần
   if (dx + dy !== 1) return false;
-
-  // Logic riêng cho từng màu
-  if (color === 'r') { // QUÂN ĐỎ (Đi từ dưới lên - y giảm)
-    // 1. Cấm đi lùi (tức là y tăng -> ty > py)
+  if (color === 'r') {
     if (ty > py) return false;
-
-    // 2. Kiểm tra qua sông
-    // Sông ở giữa y=4 và y=5. Đỏ qua sông khi y <= 4.
-    if (py > 4) { 
-      // Chưa qua sông: Chỉ được đi thẳng (dx = 0), Cấm đi ngang
-      if (dx !== 0) return false;
-    } else {
-      // Đã qua sông: Được đi ngang, nhưng vẫn cấm đi lùi (đã check ở trên)
-      // Không cần check gì thêm
-    }
-  } else { // QUÂN ĐEN (Đi từ trên xuống - y tăng)
-    // 1. Cấm đi lùi (tức là y giảm -> ty < py)
+    if (py > 4 && dx !== 0) return false;
+  } else {
     if (ty < py) return false;
-
-    // 2. Kiểm tra qua sông
-    // Đen qua sông khi y >= 5.
-    if (py < 5) {
-      // Chưa qua sông: Chỉ đi thẳng
-      if (dx !== 0) return false;
-    }
+    if (py < 5 && dx !== 0) return false;
   }
-
   return true;
 };
 
+// --- LOGIC MỚI: KIỂM TRA LỘ MẶT TƯỚNG (FLYING GENERAL) ---
+const causesFlyingGeneral = (piece, targetX, targetY, currentPieces) => {
+  // 1. GIẢ LẬP NƯỚC ĐI: Tạo ra một bàn cờ ảo sau khi quân đã di chuyển
+  const simPieces = currentPieces.map(p => {
+    // Di chuyển quân mình đến vị trí mới
+    if (p.id === piece.id) {
+      return { ...p, x: targetX, y: targetY };
+    }
+    return p;
+  }).filter(p => {
+    // Nếu tại ô đích có quân địch (ăn quân), thì loại quân địch đó ra khỏi bàn cờ ảo
+    // Logic: Nếu quân p đang ở vị trí đích VÀ không phải là quân vừa di chuyển tới -> Bị ăn
+    return !(p.x === targetX && p.y === targetY && p.id !== piece.id);
+  });
 
-// --- HÀM TỔNG HỢP ---
+  // 2. TÌM VỊ TRÍ 2 TƯỚNG TRÊN BÀN CỜ ẢO
+  const redKing = simPieces.find(p => p.type === 'k' && p.color === 'r');
+  const blackKing = simPieces.find(p => p.type === 'k' && p.color === 'b');
+
+  // (Phòng hờ trường hợp không tìm thấy tướng - dù hiếm khi xảy ra)
+  if (!redKing || !blackKing) return false;
+
+  // 3. KIỂM TRA XEM CÓ CÙNG CỘT KHÔNG
+  if (redKing.x !== blackKing.x) return false; // Khác cột -> An toàn
+
+  // 4. ĐẾM SỐ VẬT CẢN Ở GIỮA
+  const obstacles = countObstacles(redKing.x, redKing.y, blackKing.x, blackKing.y, simPieces);
+
+  // Nếu không có vật cản (obstacles === 0) -> Lộ mặt tướng -> Nước đi PHẠM LUẬT
+  return obstacles === 0;
+};
+
+
+// --- HÀM TỔNG HỢP (Main Validator) ---
 export const isValidMove = (piece, targetX, targetY, pieces) => {
   const { x, y, type } = piece;
   if (x === targetX && y === targetY) return false;
 
+  // BƯỚC 1: Kiểm tra luật di chuyển cơ bản của từng quân
+  let isBasicMoveValid = false;
   switch (type) {
-    case 'r': return validateRook(x, y, targetX, targetY, pieces);
-    case 'c': return validateCannon(x, y, targetX, targetY, pieces);
-    case 'n': return validateKnight(x, y, targetX, targetY, pieces);
-    case 'b': return validateElephant(piece, targetX, targetY, pieces);
-    
-    case 'a': // Sĩ (Advisor)
-      return validateAdvisor(piece, targetX, targetY);
-      
-    case 'k': // Tướng (King/General)
-      return validateGeneral(piece, targetX, targetY);
-      
-    case 'p': // Tốt (Pawn)
-      return validateSoldier(piece, targetX, targetY);
-
-    default:
-      return true;
+    case 'r': isBasicMoveValid = validateRook(x, y, targetX, targetY, pieces); break;
+    case 'c': isBasicMoveValid = validateCannon(x, y, targetX, targetY, pieces); break;
+    case 'n': isBasicMoveValid = validateKnight(x, y, targetX, targetY, pieces); break;
+    case 'b': isBasicMoveValid = validateElephant(piece, targetX, targetY, pieces); break;
+    case 'a': isBasicMoveValid = validateAdvisor(piece, targetX, targetY); break;
+    case 'k': isBasicMoveValid = validateGeneral(piece, targetX, targetY); break;
+    case 'p': isBasicMoveValid = validateSoldier(piece, targetX, targetY); break;
+    default: isBasicMoveValid = true;
   }
+
+  // Nếu đi sai luật cơ bản (VD: Mã đi thẳng) -> Loại ngay
+  if (!isBasicMoveValid) return false;
+
+  // BƯỚC 2: Kiểm tra luật "Lộ mặt tướng" (MỚI)
+  // Dù đi đúng luật cơ bản, nhưng nếu để hở mặt tướng -> Vẫn tính là Sai
+  if (causesFlyingGeneral(piece, targetX, targetY, pieces)) {
+    console.log("Không được để lộ mặt tướng!");
+    return false;
+  }
+
+  return true;
 };
