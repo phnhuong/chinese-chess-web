@@ -1,6 +1,7 @@
 import React from 'react';
+import Piece from './Piece'; // Import quân cờ
 
-const Board = () => {
+const Board = ({ pieces }) => { // Nhận props pieces từ App
   return (
     <div className="w-[450px] h-[500px] bg-[#eecfa1] rounded-lg shadow-2xl flex justify-center items-center relative border-4 border-[#eecfa1]">
       
@@ -18,26 +19,24 @@ const Board = () => {
             <span>HÁN GIỚI</span>
         </div>
 
-        {/* --- CỬU CUNG (MỚI THÊM) --- */}
-        
-        {/* Cung Đỏ (Dưới) */}
-        {/* Đường chéo 1: Từ (3,7) đến (5,9) */}
+        {/* Cửu cung */}
         <div className="absolute top-[350px] left-[150px] w-[100px] h-[100px]">
-             {/* Vẽ 2 đường chéo bằng SVG cho nét và đẹp */}
              <svg width="100%" height="100%">
                 <line x1="0" y1="0" x2="100" y2="100" stroke="#5d4037" strokeWidth="1" />
                 <line x1="100" y1="0" x2="0" y2="100" stroke="#5d4037" strokeWidth="1" />
              </svg>
         </div>
-
-        {/* Cung Đen (Trên) */}
-        {/* Đường chéo 2: Từ (3,0) đến (5,2) */}
         <div className="absolute top-[0px] left-[150px] w-[100px] h-[100px]">
              <svg width="100%" height="100%">
                 <line x1="0" y1="0" x2="100" y2="100" stroke="#5d4037" strokeWidth="1" />
                 <line x1="100" y1="0" x2="0" y2="100" stroke="#5d4037" strokeWidth="1" />
              </svg>
         </div>
+
+        {/* --- HIỂN THỊ CÁC QUÂN CỜ --- */}
+        {pieces && pieces.map((piece) => (
+          <Piece key={piece.id} piece={piece} />
+        ))}
 
       </div>
     </div>
