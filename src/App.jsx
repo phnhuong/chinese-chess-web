@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react'
 import Board from './components/Board'
-import Lobby from './components/Lobby' // Import Sảnh chờ
+import Lobby from './components/Lobby'
 import { initialBoardState } from './utils/initialState'
 import { isValidMove, isCheck, willCauseSelfCheck, isGameOver } from './utils/rules'
 
-// --- IMPORT FIREBASE ---
+// Import Firebase
 import { db } from './firebase';
-import { collection, addDoc, doc, getDoc, onSnapshot } from "firebase/firestore";
+import { collection, addDoc, doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
 
 function App() {
   // STATE GAME
@@ -17,84 +17,58 @@ function App() {
   const [winner, setWinner] = useState(null);
   const [history, setHistory] = useState([]);
   
-  // STATE ONLINE (MỚI)
-  const [gameId, setGameId] = useState(null); // Nếu có ID nghĩa là đang trong phòng
-  const [playerColor, setPlayerColor] = useState(null); // Mình là 'r' hay 'b'?
+  // STATE ONLINE
+  const [gameId, setGameId] = useState(null); 
+  const [playerColor, setPlayerColor] = useState(null); // 'r' hoặc 'b'
 
   const historyEndRef = useRef(null);
 
-  // --- 1. CHỨC NĂNG TẠO PHÒNG (CREATE) ---
-  const handleCreateGame = async () => {
-    try {
-      // Tạo một bản ghi mới lên Firebase
-      const docRef = await addDoc(collection(db, "games"), {
-        pieces: initialBoardState, // Bàn cờ ban đầu
-        turn: 'r',                 // Lượt đỏ đi trước
-        history: [],               // Lịch sử trống
-        winner: null,
-        createdAt: new Date()
-      });
+  // --- 1. LẮNG NGHE DỮ LIỆU TỪ FIREBASE (REALTIME) ---
+  useEffect(() => {
+    if (!gameId) return;
 
-      console.log("Phòng đã tạo với ID: ", docRef.id);
-      
-      // Cập nhật trạng thái để vào game
-      setGameId(docRef.id);
-      setPlayerColor('r'); // Người tạo phòng mặc định cầm quân ĐỎ
-      alert(`Tạo phòng thành công!\nMã phòng của bạn là: ${docRef.id}\nHãy copy mã này gửi cho bạn bè.`);
-      
-    } catch (e) {
-      console.error("Lỗi tạo phòng: ", e);
-      alert("Lỗi kết nối Firebase!");
-    }
-  };
-
-  // --- 2. CHỨC NĂNG VÀO PHÒNG (JOIN) ---
-  const handleJoinGame = async (idInput) => {
-    const cleanId = idInput.trim();
-    if (!cleanId) return;
-
-    try {
-      // Kiểm tra xem phòng có tồn tại không
-      const docRef = doc(db, "games", cleanId);
-      const docSnap = await getDoc(docRef);
-
+    const docRef = doc(db, "games", gameId);
+    
+    // Tự động chạy khi Firebase có thay đổi
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
-        console.log("Đã tìm thấy phòng:", docSnap.data());
+        const data = docSnap.data();
         
-        // Cập nhật trạng thái
-        setGameId(cleanId);
-        setPlayerColor('b'); // Người vào sau mặc định cầm quân ĐEN
+        // Cập nhật State từ dữ liệu Server
+        setPieces(data.pieces);
+        setTurn(data.turn);
+        setHistory(data.history || []);
+        setWinner(data.winner);
         
-        // (Tạm thời ta chưa đồng bộ dữ liệu ngay, để Ngày 17 làm cho đỡ rối)
-        // Hiện tại cứ load bàn cờ mặc định đã
+        // Kiểm tra chiếu tướng để hiện thông báo
+        if (isCheck(data.pieces, data.turn)) {
+           setMessage(`⚠️ ${data.turn === 'r' ? 'ĐỎ' : 'ĐEN'} ĐANG CHIẾU TƯỚNG!`);
+        } else {
+           setMessage("");
+        }
+
       } else {
-        alert("Không tìm thấy phòng này! Vui lòng kiểm tra lại mã.");
+        alert("Phòng này không tồn tại hoặc đã bị hủy!");
+        setGameId(null);
+        setPlayerColor(null);
+        resetGame();
       }
-    } catch (e) {
-      console.error("Lỗi vào phòng: ", e);
-      alert("Lỗi kết nối!");
-    }
-  };
+    });
 
-  // --- HÀM THOÁT PHÒNG ---
-  const leaveRoom = () => {
-    setGameId(null);
-    setPlayerColor(null);
-    resetGame();
-  }
+    return () => unsubscribe(); // Cleanup
+  }, [gameId]);
 
-  // ... (GIỮ NGUYÊN CÁC HÀM LOGIC GAME CŨ: playSound, resetGame, createMoveLog, executeMove...) ...
-  // ĐỂ TIẾT KIỆM KHÔNG GIAN CHO BẠN COPY, TÔI VIẾT LẠI NGẮN GỌN CÁC HÀM CŨ Ở DƯỚI
-  // BẠN HÃY ĐẢM BẢO COPY ĐẦY ĐỦ NHÉ
+  // Cuộn lịch sử xuống cuối
+  useEffect(() => {
+    historyEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [history]);
 
+
+  // --- CÁC HÀM HỖ TRỢ ---
   const playSound = (type) => {
     const audio = new Audio(`/sounds/${type}.mp3`);
     audio.play().catch(() => {});
   };
-
-  useEffect(() => {
-    historyEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [history]);
 
   const resetGame = () => {
     setPieces(initialBoardState);
@@ -105,6 +79,91 @@ function App() {
     setHistory([]);
   };
 
+  const leaveRoom = () => {
+    setGameId(null);
+    setPlayerColor(null);
+    resetGame();
+  };
+
+  // --- TẠO & VÀO PHÒNG ---
+  const handleCreateGame = async () => {
+    try {
+      const docRef = await addDoc(collection(db, "games"), {
+        pieces: initialBoardState,
+        turn: 'r',
+        history: [],
+        winner: null,
+        createdAt: new Date()
+      });
+      setGameId(docRef.id);
+      setPlayerColor('r'); // Chủ phòng cầm Đỏ
+      alert(`Tạo phòng thành công!\nMã: ${docRef.id}`);
+    } catch (e) {
+      console.error(e);
+      alert("Lỗi tạo phòng!");
+    }
+  };
+
+  const handleJoinGame = async (idInput) => {
+    const cleanId = idInput.trim();
+    if (!cleanId) return;
+    try {
+      const docRef = doc(db, "games", cleanId);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        setGameId(cleanId);
+        setPlayerColor('b'); // Khách cầm Đen
+      } else {
+        alert("Không tìm thấy phòng!");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Lỗi kết nối!");
+    }
+  };
+
+  // --- LOGIC GỬI NƯỚC ĐI LÊN SERVER ---
+  const updateGameState = async (newPieces, currentTurnPlaying, newHistoryEntry = null) => {
+    // Tính toán lượt kế tiếp
+    const nextTurn = currentTurnPlaying === 'r' ? 'b' : 'r';
+    let newWinner = null;
+    if (isGameOver(newPieces, nextTurn)) {
+      newWinner = currentTurnPlaying;
+    }
+
+    if (gameId) {
+      // ONLINE: Gửi lên Firebase
+      const gameRef = doc(db, "games", gameId);
+      const updateData = {
+        pieces: newPieces,
+        turn: nextTurn,
+        winner: newWinner
+      };
+      
+      // Nếu có lịch sử mới thì gửi kèm mảng lịch sử mới
+      if (newHistoryEntry) {
+        // (Lưu ý: history ở đây là state cũ, ta cộng thêm cái mới vào)
+        updateData.history = [...history, newHistoryEntry];
+      }
+
+      await updateDoc(gameRef, updateData);
+      // Không cần setPieces ở đây vì onSnapshot sẽ lo việc đó
+    } else {
+      // OFFLINE: Cập nhật State trực tiếp
+      setPieces(newPieces);
+      setTurn(nextTurn);
+      if (newHistoryEntry) setHistory(prev => [...prev, newHistoryEntry]);
+      if (newWinner) setWinner(newWinner);
+      
+      if (isCheck(newPieces, nextTurn)) { // Logic check chiếu cho Offline
+         setMessage(`⚠️ ${nextTurn === 'r' ? 'ĐỎ' : 'ĐEN'} ĐANG CHIẾU TƯỚNG!`);
+      } else {
+         setMessage("");
+      }
+    }
+  };
+
+  // --- XỬ LÝ NƯỚC ĐI ---
   const createMoveLog = (piece, targetX, targetY) => {
     const letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'];
     const fromLabel = `${letters[piece.x]}${9 - piece.y}`;
@@ -114,10 +173,18 @@ function App() {
   };
 
   const executeMove = (piece, targetX, targetY, isCapture) => {
+    // 1. Tạo log
     const moveText = createMoveLog(piece, targetX, targetY);
-    setHistory(prev => [...prev, { turn: turn, text: moveText, isCapture: isCapture }]);
+    const newHistoryEntry = { 
+      turn: turn, 
+      text: moveText, 
+      isCapture: isCapture 
+    };
+
+    // 2. Âm thanh (Chạy luôn cho mượt)
     playSound(isCapture ? 'capture' : 'move');
 
+    // 3. Tính vị trí mới
     let newPieces;
     if (isCapture) {
       newPieces = pieces.filter(p => !(p.x === targetX && p.y === targetY)).map(p => {
@@ -131,80 +198,78 @@ function App() {
       });
     }
 
-    setPieces(newPieces);
+    // 4. Gửi đi
+    updateGameState(newPieces, turn, newHistoryEntry);
     setSelectedPiece(null);
-    const nextTurn = turn === 'r' ? 'b' : 'r';
-    setTurn(nextTurn);
-
-    if (isCheck(newPieces, turn)) setMessage(`⚠️ ${turn === 'r' ? 'ĐỎ' : 'ĐEN'} ĐANG CHIẾU TƯỚNG!`);
-    else setMessage("");
-
-    if (isGameOver(newPieces, nextTurn)) setWinner(turn);
   };
 
+  // --- CLICK QUÂN ---
   const handlePieceClick = (targetPiece) => {
     if (winner) return;
-    
-    // --- LOGIC MỚI: CHẶN CLICK NẾU KHÔNG PHẢI QUÂN MÌNH ---
-    // Nếu chơi Online, mình chỉ được điều khiển quân màu của mình
-    if (gameId && playerColor) {
-        // Nếu đến lượt mình đi, nhưng mình lại click vào quân đối phương để chọn -> Cấm
-        // (Logic này hơi phức tạp: Nếu click quân địch để ĂN thì được. Nếu click để CHỌN thì không)
-        // Tạm thời ta cứ để logic cũ, nhưng ở Ngày 17 ta sẽ chặn chặt chẽ hơn.
-    }
-    // -----------------------------------------------------
 
+    // CHẶN ONLINE: Không được đụng vào quân đối phương khi chưa đến lượt hoặc để chọn
+    if (gameId) {
+        // Chưa đến lượt chung -> Cấm
+        if (turn !== playerColor) return;
+        
+        // Đến lượt mình, nhưng click vào quân địch để chọn (chưa chọn quân mình) -> Cấm
+        if (!selectedPiece && targetPiece.color !== playerColor) return;
+    }
+
+    // Chọn quân
     if (!selectedPiece) {
       if (targetPiece.color !== turn) return; 
       setSelectedPiece(targetPiece);
       return;
     }
 
-    if (targetPiece.id === selectedPiece.id) {
-      setSelectedPiece(null);
-      return;
-    }
+    // Đổi ý chọn quân khác cùng màu
     if (targetPiece.color === selectedPiece.color) {
       if (targetPiece.color === turn) setSelectedPiece(targetPiece);
       return;
     }
 
+    // ĂN QUÂN
     if (!isValidMove(selectedPiece, targetPiece.x, targetPiece.y, pieces)) return;
     if (willCauseSelfCheck(selectedPiece, targetPiece.x, targetPiece.y, pieces)) return;
 
     executeMove(selectedPiece, targetPiece.x, targetPiece.y, true);
   };
 
+  // --- CLICK Ô TRỐNG ---
   const handleSquareClick = (x, y) => {
     if (winner) return;
     if (!selectedPiece) return;
+
+    // CHẶN ONLINE: Chưa đến lượt thì không được đi
+    if (gameId && turn !== playerColor) return;
+
     if (!isValidMove(selectedPiece, x, y, pieces)) return;
     if (willCauseSelfCheck(selectedPiece, x, y, pieces)) return;
+
     executeMove(selectedPiece, x, y, false);
   };
 
-  // --- GIAO DIỆN ---
+  // --- RENDER ---
   return (
     <div className="min-h-screen bg-slate-800 font-sans flex flex-col items-center py-5">
       <h1 className="text-4xl font-bold text-yellow-500 mb-4 tracking-widest drop-shadow-md">
         KỲ VƯƠNG ONLINE
       </h1>
 
-      {/* ĐIỀU KIỆN HIỂN THỊ: NẾU CHƯA CÓ GAME ID -> HIỆN LOBBY */}
       {!gameId ? (
         <Lobby onCreateGame={handleCreateGame} onJoinGame={handleJoinGame} />
       ) : (
-        // NẾU ĐÃ CÓ GAME ID -> HIỆN BÀN CỜ
         <div className="flex flex-col lg:flex-row gap-8 items-start animate-fade-in">
           
           <div className="relative">
-            {/* THANH THÔNG TIN TRÊN ĐẦU */}
+            {/* THANH THÔNG TIN TRÊN */}
             <div className="mb-4 flex justify-between items-center w-[560px]">
-                <div className="px-4 py-2 rounded bg-slate-700 text-white border border-slate-600 shadow">
-                   Phòng: <span className="text-yellow-400 font-mono font-bold">{gameId}</span>
+                <div className="px-4 py-2 rounded bg-slate-700 text-white border border-slate-600 shadow text-sm">
+                   Phòng: <span className="text-yellow-400 font-mono font-bold select-all">{gameId}</span>
                 </div>
                 <div className={`px-4 py-2 rounded font-bold border ${playerColor === 'r' ? 'bg-red-900 text-red-100 border-red-500' : 'bg-black text-gray-300 border-gray-600'}`}>
-                   Bạn cầm quân: {playerColor === 'r' ? 'ĐỎ' : 'ĐEN'}
+                   Bạn cầm: {playerColor === 'r' ? 'ĐỎ' : 'ĐEN'}
                 </div>
                 <button onClick={leaveRoom} className="text-xs text-red-400 hover:underline">Thoát</button>
             </div>
@@ -228,8 +293,8 @@ function App() {
                 <h2 className={`text-6xl font-bold mb-8 ${winner === 'r' ? 'text-red-500' : 'text-white'}`}>
                     {winner === 'r' ? 'ĐỎ THẮNG!' : 'ĐEN THẮNG!'}
                 </h2>
-                <button onClick={resetGame} className="px-8 py-3 bg-yellow-500 text-black font-bold text-2xl rounded-lg hover:bg-yellow-400 transition-colors shadow-lg">
-                    Ván Mới
+                <button onClick={leaveRoom} className="px-8 py-3 bg-yellow-500 text-black font-bold text-2xl rounded-lg hover:bg-yellow-400 transition-colors shadow-lg">
+                    Thoát Phòng
                 </button>
                 </div>
             )}
@@ -242,12 +307,10 @@ function App() {
             />
           </div>
 
-          {/* CỘT PHẢI: BIÊN BẢN */}
-          <div className="w-[300px] h-[550px] bg-slate-700 rounded-lg border-2 border-slate-600 flex flex-col shadow-xl">
+          <div className="w-[300px] h-[610px] bg-slate-700 rounded-lg border-2 border-slate-600 flex flex-col shadow-xl">
             <div className="bg-slate-900 p-3 text-center border-b border-slate-600">
                 <h3 className="text-yellow-500 font-bold text-xl uppercase">Biên Bản</h3>
             </div>
-            
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
                 {history.length === 0 ? (
                 <p className="text-gray-500 text-center italic mt-10">Chưa có nước đi nào...</p>
