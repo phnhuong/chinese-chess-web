@@ -1,10 +1,8 @@
 import React from 'react';
 
-const Piece = ({ piece, onClick, isSelected }) => {
+const Piece = ({ piece, onClick, isSelected, isFlipped }) => {
   
-  // SỬA LỖI Ở ĐÂY: So sánh với 'r' thay vì 'red'
   const isRed = piece.color === 'r';
-  
   const colorClass = isRed ? 'text-[#d63031] border-[#d63031]' : 'text-[#2d3436] border-[#2d3436]';
   const bgClass = 'bg-[#fdf5e6]';
 
@@ -12,9 +10,23 @@ const Piece = ({ piece, onClick, isSelected }) => {
     ? 'ring-4 ring-blue-500 scale-110 z-30 shadow-xl' 
     : 'hover:scale-110 z-20';
 
+  // --- TÍNH TOÁN VỊ TRÍ HIỂN THỊ ---
+  let leftVal, topVal;
+  
+  if (isFlipped) {
+    // Nếu lật ngược: Tọa độ 0 thành 8 (ngang) và 0 thành 9 (dọc)
+    // Công thức: (MAX - pos) * 50
+    leftVal = (8 - piece.x) * 50;
+    topVal = (9 - piece.y) * 50;
+  } else {
+    // Bình thường
+    leftVal = piece.x * 50;
+    topVal = piece.y * 50;
+  }
+
   const style = {
-    left: `${piece.x * 50}px`,
-    top: `${piece.y * 50}px`,
+    left: `${leftVal}px`,
+    top: `${topVal}px`,
     transform: 'translate(-50%, -50%)',
   };
 
@@ -29,7 +41,7 @@ const Piece = ({ piece, onClick, isSelected }) => {
   return (
     <div 
       onClick={onClick}
-      className={`absolute w-[40px] h-[40px] rounded-full border-2 flex justify-center items-center shadow-md cursor-pointer select-none transition-all duration-200 ${colorClass} ${bgClass} ${selectedClass}`}
+      className={`absolute w-[40px] h-[40px] rounded-full border-2 flex justify-center items-center shadow-md cursor-pointer select-none transition-all duration-500 ${colorClass} ${bgClass} ${selectedClass}`}
       style={style}
     >
       <span className="text-xl font-bold font-serif" style={{ marginTop: '-2px' }}>

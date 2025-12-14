@@ -3,13 +3,10 @@ import Board from './components/Board'
 import Lobby from './components/Lobby'
 import { initialBoardState } from './utils/initialState'
 import { isValidMove, isCheck, willCauseSelfCheck, isGameOver } from './utils/rules'
-
-// Import Firebase
 import { db } from './firebase';
 import { collection, addDoc, doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
 
 function App() {
-  // STATE GAME
   const [pieces, setPieces] = useState(initialBoardState);
   const [selectedPiece, setSelectedPiece] = useState(null);
   const [turn, setTurn] = useState('r');
@@ -17,54 +14,40 @@ function App() {
   const [winner, setWinner] = useState(null);
   const [history, setHistory] = useState([]);
   
-  // STATE ONLINE
   const [gameId, setGameId] = useState(null); 
-  const [playerColor, setPlayerColor] = useState(null); // 'r' hoặc 'b'
+  const [playerColor, setPlayerColor] = useState(null);
 
   const historyEndRef = useRef(null);
 
-  // --- 1. LẮNG NGHE DỮ LIỆU TỪ FIREBASE (REALTIME) ---
   useEffect(() => {
     if (!gameId) return;
-
     const docRef = doc(db, "games", gameId);
-    
-    // Tự động chạy khi Firebase có thay đổi
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        
-        // Cập nhật State từ dữ liệu Server
         setPieces(data.pieces);
         setTurn(data.turn);
         setHistory(data.history || []);
         setWinner(data.winner);
-        
-        // Kiểm tra chiếu tướng để hiện thông báo
         if (isCheck(data.pieces, data.turn)) {
            setMessage(`⚠️ ${data.turn === 'r' ? 'ĐỎ' : 'ĐEN'} ĐANG CHIẾU TƯỚNG!`);
         } else {
            setMessage("");
         }
-
       } else {
-        alert("Phòng này không tồn tại hoặc đã bị hủy!");
+        alert("Phòng không tồn tại!");
         setGameId(null);
         setPlayerColor(null);
         resetGame();
       }
     });
-
-    return () => unsubscribe(); // Cleanup
+    return () => unsubscribe();
   }, [gameId]);
 
-  // Cuộn lịch sử xuống cuối
   useEffect(() => {
     historyEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [history]);
 
-
-  // --- CÁC HÀM HỖ TRỢ ---
   const playSound = (type) => {
     const audio = new Audio(`/sounds/${type}.mp3`);
     audio.play().catch(() => {});
@@ -85,7 +68,6 @@ function App() {
     resetGame();
   };
 
-  // --- TẠO & VÀO PHÒNG ---
   const handleCreateGame = async () => {
     try {
       const docRef = await addDoc(collection(db, "games"), {
@@ -96,7 +78,7 @@ function App() {
         createdAt: new Date()
       });
       setGameId(docRef.id);
-      setPlayerColor('r'); // Chủ phòng cầm Đỏ
+      setPlayerColor('r');
       alert(`Tạo phòng thành công!\nMã: ${docRef.id}`);
     } catch (e) {
       console.error(e);
@@ -112,7 +94,7 @@ function App() {
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         setGameId(cleanId);
-        setPlayerColor('b'); // Khách cầm Đen
+        setPlayerColor('b');
       } else {
         alert("Không tìm thấy phòng!");
       }
@@ -122,9 +104,7 @@ function App() {
     }
   };
 
-  // --- LOGIC GỬI NƯỚC ĐI LÊN SERVER ---
   const updateGameState = async (newPieces, currentTurnPlaying, newHistoryEntry = null) => {
-    // Tính toán lượt kế tiếp
     const nextTurn = currentTurnPlaying === 'r' ? 'b' : 'r';
     let newWinner = null;
     if (isGameOver(newPieces, nextTurn)) {
@@ -132,30 +112,23 @@ function App() {
     }
 
     if (gameId) {
-      // ONLINE: Gửi lên Firebase
       const gameRef = doc(db, "games", gameId);
       const updateData = {
         pieces: newPieces,
         turn: nextTurn,
         winner: newWinner
       };
-      
-      // Nếu có lịch sử mới thì gửi kèm mảng lịch sử mới
       if (newHistoryEntry) {
-        // (Lưu ý: history ở đây là state cũ, ta cộng thêm cái mới vào)
         updateData.history = [...history, newHistoryEntry];
       }
-
       await updateDoc(gameRef, updateData);
-      // Không cần setPieces ở đây vì onSnapshot sẽ lo việc đó
     } else {
-      // OFFLINE: Cập nhật State trực tiếp
       setPieces(newPieces);
       setTurn(nextTurn);
       if (newHistoryEntry) setHistory(prev => [...prev, newHistoryEntry]);
       if (newWinner) setWinner(newWinner);
       
-      if (isCheck(newPieces, nextTurn)) { // Logic check chiếu cho Offline
+      if (isCheck(newPieces, nextTurn)) {
          setMessage(`⚠️ ${nextTurn === 'r' ? 'ĐỎ' : 'ĐEN'} ĐANG CHIẾU TƯỚNG!`);
       } else {
          setMessage("");
@@ -163,7 +136,6 @@ function App() {
     }
   };
 
-  // --- XỬ LÝ NƯỚC ĐI ---
   const createMoveLog = (piece, targetX, targetY) => {
     const letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'];
     const fromLabel = `${letters[piece.x]}${9 - piece.y}`;
@@ -173,7 +145,6 @@ function App() {
   };
 
   const executeMove = (piece, targetX, targetY, isCapture) => {
-    // 1. Tạo log
     const moveText = createMoveLog(piece, targetX, targetY);
     const newHistoryEntry = { 
       turn: turn, 
@@ -181,10 +152,8 @@ function App() {
       isCapture: isCapture 
     };
 
-    // 2. Âm thanh (Chạy luôn cho mượt)
     playSound(isCapture ? 'capture' : 'move');
 
-    // 3. Tính vị trí mới
     let newPieces;
     if (isCapture) {
       newPieces = pieces.filter(p => !(p.x === targetX && p.y === targetY)).map(p => {
@@ -198,50 +167,43 @@ function App() {
       });
     }
 
-    // 4. Gửi đi
     updateGameState(newPieces, turn, newHistoryEntry);
     setSelectedPiece(null);
   };
 
-  // --- CLICK QUÂN ---
   const handlePieceClick = (targetPiece) => {
     if (winner) return;
 
-    // CHẶN ONLINE: Không được đụng vào quân đối phương khi chưa đến lượt hoặc để chọn
     if (gameId) {
-        // Chưa đến lượt chung -> Cấm
         if (turn !== playerColor) return;
-        
-        // Đến lượt mình, nhưng click vào quân địch để chọn (chưa chọn quân mình) -> Cấm
         if (!selectedPiece && targetPiece.color !== playerColor) return;
     }
 
-    // Chọn quân
     if (!selectedPiece) {
       if (targetPiece.color !== turn) return; 
       setSelectedPiece(targetPiece);
       return;
     }
 
-    // Đổi ý chọn quân khác cùng màu
+    if (targetPiece.id === selectedPiece.id) {
+      setSelectedPiece(null);
+      return;
+    }
     if (targetPiece.color === selectedPiece.color) {
       if (targetPiece.color === turn) setSelectedPiece(targetPiece);
       return;
     }
 
-    // ĂN QUÂN
     if (!isValidMove(selectedPiece, targetPiece.x, targetPiece.y, pieces)) return;
     if (willCauseSelfCheck(selectedPiece, targetPiece.x, targetPiece.y, pieces)) return;
 
     executeMove(selectedPiece, targetPiece.x, targetPiece.y, true);
   };
 
-  // --- CLICK Ô TRỐNG ---
   const handleSquareClick = (x, y) => {
     if (winner) return;
     if (!selectedPiece) return;
 
-    // CHẶN ONLINE: Chưa đến lượt thì không được đi
     if (gameId && turn !== playerColor) return;
 
     if (!isValidMove(selectedPiece, x, y, pieces)) return;
@@ -250,7 +212,6 @@ function App() {
     executeMove(selectedPiece, x, y, false);
   };
 
-  // --- RENDER ---
   return (
     <div className="min-h-screen bg-slate-800 font-sans flex flex-col items-center py-5">
       <h1 className="text-4xl font-bold text-yellow-500 mb-4 tracking-widest drop-shadow-md">
@@ -263,7 +224,6 @@ function App() {
         <div className="flex flex-col lg:flex-row gap-8 items-start animate-fade-in">
           
           <div className="relative">
-            {/* THANH THÔNG TIN TRÊN */}
             <div className="mb-4 flex justify-between items-center w-[560px]">
                 <div className="px-4 py-2 rounded bg-slate-700 text-white border border-slate-600 shadow text-sm">
                    Phòng: <span className="text-yellow-400 font-mono font-bold select-all">{gameId}</span>
@@ -274,7 +234,6 @@ function App() {
                 <button onClick={leaveRoom} className="text-xs text-red-400 hover:underline">Thoát</button>
             </div>
 
-            {/* THANH LƯỢT ĐI */}
             <div className="mb-4 px-6 py-2 rounded-full bg-slate-700 border border-slate-600 flex justify-center items-center gap-3 shadow-lg">
                 <span className="text-gray-300">Đang đi:</span>
                 <span className={`font-bold text-lg px-4 py-1 rounded ${turn === 'r' ? 'bg-red-600 text-white' : 'bg-black text-white border border-gray-500'}`}>
@@ -304,6 +263,8 @@ function App() {
                 onPieceClick={handlePieceClick} 
                 onSquareClick={handleSquareClick}
                 selectedPiece={selectedPiece}
+                // DÒNG NÀY ĐỂ KÍCH HOẠT XOAY BÀN CỜ
+                isFlipped={playerColor === 'b'} 
             />
           </div>
 
