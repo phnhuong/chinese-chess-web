@@ -1,10 +1,9 @@
-// src/components/Board.jsx
 import React from 'react';
 import Piece from './Piece';
 
 const Board = ({ pieces, onPieceClick, onSquareClick, selectedPiece }) => { 
   
-  // 1. HÀM VẼ LƯỚI TƯƠNG TÁC (Bắt sự kiện click vào ô trống)
+  // 1. HÀM VẼ LƯỚI TƯƠNG TÁC (Giữ nguyên)
   const renderIntersections = () => {
     const intersections = [];
     for (let y = 0; y < 10; y++) {
@@ -26,23 +25,25 @@ const Board = ({ pieces, onPieceClick, onSquareClick, selectedPiece }) => {
     return intersections;
   };
 
-  // 2. HÀM VẼ TỌA ĐỘ CHUẨN QUỐC TẾ (WXF / UCI)
-  // Ngang: a-i | Dọc: 9-0
+  // 2. HÀM VẼ TỌA ĐỘ (ĐÃ CHỈNH SỬA KHOẢNG CÁCH)
   const renderCoordinates = () => {
     const coords = [];
     const letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'];
+    
+    // Tăng khoảng cách đẩy ra xa: dùng -top-12, -bottom-12,... (thay vì -8)
+    // Tăng cỡ chữ: dùng text-xl (thay vì text-lg)
     
     // Vẽ chữ cái trục Ngang (a - i)
     for (let x = 0; x < 9; x++) {
       // Hàng chữ bên trên
       coords.push(
-        <span key={`top-${x}`} className="absolute -top-8 text-[#5d4037] font-bold font-mono text-lg uppercase select-none" style={{ left: `${x * 50}px`, transform: 'translateX(-50%)' }}>
+        <span key={`top-${x}`} className="absolute -top-12 text-[#3e2723] font-bold font-mono text-xl uppercase select-none" style={{ left: `${x * 50}px`, transform: 'translateX(-50%)' }}>
           {letters[x]}
         </span>
       );
       // Hàng chữ bên dưới
       coords.push(
-        <span key={`bottom-${x}`} className="absolute -bottom-8 text-[#5d4037] font-bold font-mono text-lg uppercase select-none" style={{ left: `${x * 50}px`, transform: 'translateX(-50%)' }}>
+        <span key={`bottom-${x}`} className="absolute -bottom-12 text-[#3e2723] font-bold font-mono text-xl uppercase select-none" style={{ left: `${x * 50}px`, transform: 'translateX(-50%)' }}>
           {letters[x]}
         </span>
       );
@@ -50,18 +51,17 @@ const Board = ({ pieces, onPieceClick, onSquareClick, selectedPiece }) => {
 
     // Vẽ số trục Dọc (9 - 0)
     for (let y = 0; y < 10; y++) {
-      // Logic: Hàng 0 (trên cùng) là số 9. Hàng 9 (dưới cùng) là số 0.
       const label = 9 - y; 
       
       // Cột số bên trái
       coords.push(
-        <span key={`left-${y}`} className="absolute -left-8 text-[#5d4037] font-bold font-mono text-lg select-none" style={{ top: `${y * 50}px`, transform: 'translateY(-50%)' }}>
+        <span key={`left-${y}`} className="absolute -left-12 text-[#3e2723] font-bold font-mono text-xl select-none" style={{ top: `${y * 50}px`, transform: 'translateY(-50%)' }}>
           {label}
         </span>
       );
       // Cột số bên phải
       coords.push(
-        <span key={`right-${y}`} className="absolute -right-8 text-[#5d4037] font-bold font-mono text-lg select-none" style={{ top: `${y * 50}px`, transform: 'translateY(-50%)' }}>
+        <span key={`right-${y}`} className="absolute -right-12 text-[#3e2723] font-bold font-mono text-xl select-none" style={{ top: `${y * 50}px`, transform: 'translateY(-50%)' }}>
           {label}
         </span>
       );
@@ -70,8 +70,8 @@ const Board = ({ pieces, onPieceClick, onSquareClick, selectedPiece }) => {
   };
 
   return (
-    // Tăng kích thước khung gỗ lên 500x550 để chứa đủ số tọa độ 2 bên
-    <div className="w-[500px] h-[550px] bg-[#eecfa1] rounded-lg shadow-2xl flex justify-center items-center relative border-4 border-[#eecfa1]">
+    // Tăng kích thước khung chứa lên 560x610 để tạo khoảng thở rộng rãi, không bị quân cờ che chữ
+    <div className="w-[560px] h-[610px] bg-[#eecfa1] rounded-lg shadow-2xl flex justify-center items-center relative border-4 border-[#eecfa1]">
       
       {/* Lưới bàn cờ chính */}
       <div 
@@ -91,15 +91,13 @@ const Board = ({ pieces, onPieceClick, onSquareClick, selectedPiece }) => {
             <span>HÁN GIỚI</span>
         </div>
         
-        {/* Cửu cung (Palace) - Vẽ bằng SVG */}
-        {/* Cung trên */}
+        {/* Cửu cung */}
         <div className="absolute top-[0px] left-[150px] w-[100px] h-[100px] z-0">
              <svg width="100%" height="100%">
                <line x1="0" y1="0" x2="100" y2="100" stroke="#5d4037" strokeWidth="1" />
                <line x1="100" y1="0" x2="0" y2="100" stroke="#5d4037" strokeWidth="1" />
              </svg>
         </div>
-        {/* Cung dưới */}
         <div className="absolute top-[350px] left-[150px] w-[100px] h-[100px] z-0">
              <svg width="100%" height="100%">
                <line x1="0" y1="0" x2="100" y2="100" stroke="#5d4037" strokeWidth="1" />
@@ -107,10 +105,10 @@ const Board = ({ pieces, onPieceClick, onSquareClick, selectedPiece }) => {
              </svg>
         </div>
 
-        {/* Lưới tương tác (để click) */}
+        {/* Lưới tương tác */}
         {renderIntersections()}
 
-        {/* Các quân cờ */}
+        {/* Quân cờ */}
         {pieces && pieces.map((piece) => {
             const isSelected = selectedPiece && selectedPiece.id === piece.id;
             return (
