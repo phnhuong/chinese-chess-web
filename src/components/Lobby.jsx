@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import Leaderboard from './Leaderboard'; 
-import RoomList from './RoomList'; // Import mới
+import RoomList from './RoomList';
 
-const Lobby = ({ onCreateGame, onJoinGame, user, onLogin }) => {
+// Nhận thêm prop: onPlayAI
+const Lobby = ({ onCreateGame, onJoinGame, user, onLogin, onPlayAI }) => {
   const [joinId, setJoinId] = useState("");
 
   if (!user) {
@@ -10,11 +11,7 @@ const Lobby = ({ onCreateGame, onJoinGame, user, onLogin }) => {
       <div className="flex flex-col items-center gap-6 p-10 bg-slate-700 rounded-xl shadow-2xl border border-slate-600">
         <h2 className="text-3xl font-bold text-yellow-500 uppercase tracking-widest">Kỳ Vương Online</h2>
         <p className="text-gray-300">Vui lòng đăng nhập để bắt đầu</p>
-        
-        <button 
-          onClick={onLogin}
-          className="flex items-center gap-3 px-6 py-3 bg-white text-gray-800 font-bold rounded-lg hover:bg-gray-100 transition-colors shadow-lg"
-        >
+        <button onClick={onLogin} className="flex items-center gap-3 px-6 py-3 bg-white text-gray-800 font-bold rounded-lg hover:bg-gray-100 transition-colors shadow-lg">
           <span className="text-xl font-bold text-blue-600">G</span>
           Đăng nhập bằng Google
         </button>
@@ -26,7 +23,6 @@ const Lobby = ({ onCreateGame, onJoinGame, user, onLogin }) => {
   return (
     <div className="flex flex-col md:flex-row gap-8 items-start w-full max-w-5xl px-4">
         
-        {/* CỘT TRÁI: ĐIỀU KHIỂN & ROOM LIST */}
         <div className="flex-1 flex flex-col items-center gap-6 p-8 bg-slate-700 rounded-xl shadow-2xl border border-slate-600 w-full">
             <div className="flex flex-col items-center gap-2 mb-2 w-full">
                 <div className="flex items-center gap-4 w-full justify-center">
@@ -41,9 +37,14 @@ const Lobby = ({ onCreateGame, onJoinGame, user, onLogin }) => {
                 </div>
             </div>
 
-            <div className="w-full flex gap-2">
+            <div className="w-full flex gap-3">
                 <button onClick={onCreateGame} className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold text-lg rounded-lg shadow-lg transition-transform active:scale-95 flex justify-center items-center gap-2">
                     <span>⚔️</span> TẠO PHÒNG
+                </button>
+                
+                {/* NÚT CHƠI VỚI MÁY (MỚI) */}
+                <button onClick={onPlayAI} className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-lg rounded-lg shadow-lg transition-transform active:scale-95 flex justify-center items-center gap-2">
+                    <span>🤖</span> LUYỆN TẬP
                 </button>
             </div>
 
@@ -55,12 +56,9 @@ const Lobby = ({ onCreateGame, onJoinGame, user, onLogin }) => {
                 </div>
             </div>
 
-            {/* DANH SÁCH PHÒNG (MỚI) */}
             <RoomList onJoinRoom={onJoinGame} />
-            
         </div>
 
-        {/* CỘT PHẢI: BẢNG XẾP HẠNG */}
         <div className="w-full md:w-80">
             <Leaderboard />
         </div>
