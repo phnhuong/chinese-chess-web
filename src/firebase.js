@@ -1,8 +1,8 @@
-// src/firebase.js
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
 
-// Cấu hình Firebase của bạn
+// Dán config của bạn vào đây (nếu bị mất)
 const firebaseConfig = {
   apiKey: "AIzaSyAMpdgtoA5TGpo9WxayE6BeMFSp61usmLI",
   authDomain: "chinese-chess-web.firebaseapp.com",
@@ -12,8 +12,9 @@ const firebaseConfig = {
   appId: "1:747776925950:web:773154b908fc2e911945af"
 };
 
-// Khởi tạo Firebase App
 const app = initializeApp(firebaseConfig);
-
-// Khởi tạo Firestore Database và Export ra để dùng ở nơi khác
 export const db = getFirestore(app);
+
+// Khởi tạo Auth
+export const auth = getAuth(app);
+export const googleProvider = new GoogleAuthProvider();
