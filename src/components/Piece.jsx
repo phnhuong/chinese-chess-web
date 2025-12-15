@@ -1,6 +1,6 @@
 import React from 'react';
 
-const Piece = ({ piece, onClick, isSelected, isFlipped }) => {
+const Piece = ({ piece, onClick, isSelected, customStyle }) => {
   
   const isRed = piece.color === 'r';
   const colorClass = isRed ? 'text-[#d63031] border-[#d63031]' : 'text-[#2d3436] border-[#2d3436]';
@@ -9,26 +9,6 @@ const Piece = ({ piece, onClick, isSelected, isFlipped }) => {
   const selectedClass = isSelected 
     ? 'ring-4 ring-blue-500 scale-110 z-30 shadow-xl' 
     : 'hover:scale-110 z-20';
-
-  // --- TÍNH TOÁN VỊ TRÍ HIỂN THỊ ---
-  let leftVal, topVal;
-  
-  if (isFlipped) {
-    // Nếu lật ngược: Tọa độ 0 thành 8 (ngang) và 0 thành 9 (dọc)
-    // Công thức: (MAX - pos) * 50
-    leftVal = (8 - piece.x) * 50;
-    topVal = (9 - piece.y) * 50;
-  } else {
-    // Bình thường
-    leftVal = piece.x * 50;
-    topVal = piece.y * 50;
-  }
-
-  const style = {
-    left: `${leftVal}px`,
-    top: `${topVal}px`,
-    transform: 'translate(-50%, -50%)',
-  };
 
   const getLabel = (type, color) => {
     const labels = {
@@ -41,15 +21,19 @@ const Piece = ({ piece, onClick, isSelected, isFlipped }) => {
   return (
     <div 
       onClick={onClick}
-      className={`absolute w-[40px] h-[40px] rounded-full border-2 flex justify-center items-center shadow-md cursor-pointer select-none transition-all duration-500 ${colorClass} ${bgClass} ${selectedClass}`}
-      style={style}
+      className={`absolute rounded-full border-2 flex justify-center items-center shadow-md cursor-pointer select-none transition-all duration-300 ${colorClass} ${bgClass} ${selectedClass}`}
+      style={{
+          ...customStyle,
+          transform: 'translate(-50%, -50%)', // Luôn căn giữa điểm neo
+          fontSize: customStyle.fontSize // Cỡ chữ động
+      }}
     >
-      <span className="text-xl font-bold font-serif" style={{ marginTop: '-2px' }}>
+      <span className="font-bold font-serif" style={{ marginTop: '-10%' }}>
         {getLabel(piece.type, piece.color)}
       </span>
       
       {!isSelected && (
-         <div className={`absolute w-[32px] h-[32px] rounded-full border border-dashed opacity-50 ${colorClass}`}></div>
+         <div className={`absolute w-[80%] h-[80%] rounded-full border border-dashed opacity-50 ${colorClass}`}></div>
       )}
     </div>
   );
