@@ -26,127 +26,27 @@ function App() {
   const [userStats, setUserStats] = useState(null);
   const [drawReq, setDrawReq] = useState(null);
 
-  // STATE: CHẾ ĐỘ CHƠI
   const [gameMode, setGameMode] = useState('online'); 
+  const [isMuted, setIsMuted] = useState(false);
+  const [boardWidth, setBoardWidth] = useState(560);
 
   const INITIAL_GAME_TIME = 900;
   const INITIAL_MOVE_TIME = 120;
   const [redTime, setRedTime] = useState(INITIAL_GAME_TIME);
   const [blackTime, setBlackTime] = useState(INITIAL_GAME_TIME);
   const [currentMoveTime, setCurrentMoveTime] = useState(INITIAL_MOVE_TIME);
+
   const serverData = useRef({ redTime: INITIAL_GAME_TIME, blackTime: INITIAL_GAME_TIME, lastMoveTime: Date.now() });
   const historyEndRef = useRef(null);
-  const [boardWidth, setBoardWidth] = useState(560);
-  const [isMuted, setIsMuted] = useState(false);
 
-  // --- LOGIC AI (MÁY ĐI) ---
-  useEffect(() => {
-    if (gameMode === 'ai' && !winner && turn === 'b') {
-        const timer = setTimeout(() => {
-            const move = getBestMove(pieces, 'b');
-            if (move) {
-                const pieceToMove = pieces.find(p => p.id === move.fromId);
-                const isCapture = pieces.some(p => p.x === move.targetX && p.y === move.targetY);
-                executeMove(pieceToMove, move.targetX, move.targetY, isCapture);
-            } else {
-                setWinner('r');
-                setWinReason('checkmate');
-            }
-        }, 1000);
-        return () => clearTimeout(timer);
-    }
-  }, [turn, gameMode, winner, pieces]);
-
-  // --- 1. LẮNG NGHE DỮ LIỆU TỪ SERVER ---
-  useEffect(() => {
-    if (!gameId || gameMode === 'ai') return;
-
-    const docRef = doc(db, "games", gameId);
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setPieces(data.pieces);
-        setTurn(data.turn);
-        setHistory(data.history || []);
-        setWinner(data.winner);
-        if (data.chat) setChatMessages(data.chat);
-        if (data.winReason) setWinReason(data.winReason);
-        if (data.drawRequest && data.drawRequest !== playerColor && !data.winner) { setDrawReq(data.drawRequest); } else { setDrawReq(null); }
-        serverData.current = { redTime: data.redTime !== undefined ? data.redTime : INITIAL_GAME_TIME, blackTime: data.blackTime !== undefined ? data.blackTime : INITIAL_GAME_TIME, lastMoveTime: data.lastMoveTime || Date.now() };
-        syncTime();
-        if (isCheck(data.pieces, data.turn)) setMessage(`⚠️ ${data.turn === 'r' ? 'ĐỎ' : 'ĐEN'} ĐANG CHIẾU TƯỚNG!`); else setMessage("");
-      } else { 
-        alert("Phòng không tồn tại!"); 
-        leaveRoom(); 
-      }
-    });
-    return () => unsubscribe();
-  }, [gameId, playerColor, gameMode]);
-
-  const syncTime = () => {
-    if (!gameId || winner) return;
-    const now = Date.now();
-    const elapsed = Math.floor((now - serverData.current.lastMoveTime) / 1000);
-    if (turn === 'r') {
-      setRedTime(Math.max(0, serverData.current.redTime - elapsed));
-      setBlackTime(serverData.current.blackTime);
-      setCurrentMoveTime(Math.max(0, INITIAL_MOVE_TIME - elapsed));
-    } else {
-      setBlackTime(Math.max(0, serverData.current.blackTime - elapsed));
-      setRedTime(serverData.current.redTime);
-      setCurrentMoveTime(Math.max(0, INITIAL_MOVE_TIME - elapsed));
-    }
+  // --- HÀM PHÁT ÂM THANH ---
+  const playSound = (type) => {
+    if (isMuted) return;
+    const audio = new Audio(`/sounds/${type}.mp3`);
+    audio.play().catch(() => {});
   };
 
-  useEffect(() => {
-    if (!gameId || winner) return;
-    if (gameMode === 'ai') return; 
-
-    const interval = setInterval(() => { syncTime(); }, 1000);
-    return () => clearInterval(interval);
-  }, [gameId, winner, turn, gameMode]);
-
-  const handleLogin = async () => { try { const result = await signInWithPopup(auth, googleProvider); const user = result.user; const userRef = doc(db, "users", user.uid); const userSnap = await getDoc(userRef); if (!userSnap.exists()) { await setDoc(userRef, { uid: user.uid, displayName: user.displayName, photoURL: user.photoURL, email: user.email, wins: 0, losses: 0, joinedAt: new Date() }); } setCurrentUser(user); } catch (error) { console.error(error); alert("Đăng nhập thất bại!"); } };
-  useEffect(() => { if (currentUser) { const unsub = onSnapshot(doc(db, "users", currentUser.uid), (doc) => { if(doc.exists()) setUserStats(doc.data()); }); return () => unsub(); } }, [currentUser]);
-  useEffect(() => { if (gameId && !winner && turn === playerColor && gameMode === 'online') { if ((playerColor === 'r' && redTime <= 0) || (playerColor === 'b' && blackTime <= 0)) updateGameWinner(playerColor === 'r' ? 'b' : 'r', 'timeout'); if (currentMoveTime <= 0) updateGameWinner(playerColor === 'r' ? 'b' : 'r', 'timeout_move'); } }, [redTime, blackTime, currentMoveTime, gameId, winner, turn, playerColor, gameMode]);
-
-  const handlePlayAI = () => {
-      setGameId("OFFLINE-AI"); 
-      setGameMode('ai');
-      setPlayerColor('r'); 
-      setPieces(initialBoardState);
-      setTurn('r');
-      setWinner(null);
-      setHistory([]);
-      setMessage("");
-      setRedTime(INITIAL_GAME_TIME);
-      setBlackTime(INITIAL_GAME_TIME);
-  };
-
-  const resetGame = () => { 
-      setPieces(initialBoardState); setTurn('r'); setWinner(null); setWinReason(null); setMessage(""); setSelectedPiece(null); setHistory([]); setChatMessages([]); setRedTime(INITIAL_GAME_TIME); setBlackTime(INITIAL_GAME_TIME); setCurrentMoveTime(INITIAL_MOVE_TIME); setDrawReq(null); 
-      setGameMode('online'); setGameId(null); setPlayerColor(null);
-  };
-  
-  const leaveRoom = () => { resetGame(); };
-
-  const updateGameWinner = async (winnerColor, reason = "checkmate") => {
-    if (gameMode === 'ai') {
-        setWinner(winnerColor);
-        setWinReason(reason);
-        return;
-    }
-    if (gameId) { const gameRef = doc(db, "games", gameId); const gameSnap = await getDoc(gameRef); const gameData = gameSnap.data(); if (gameData.winner) return; await updateDoc(gameRef, { winner: winnerColor, winReason: reason, status: 'finished', drawRequest: null }); if (winnerColor === 'draw') return; if (winnerColor === playerColor && currentUser) { const myRef = doc(db, "users", currentUser.uid); await updateDoc(myRef, { wins: increment(1) }); const opponentId = winnerColor === 'r' ? gameData.blackPlayerId : gameData.redPlayerId; if (opponentId) { const opRef = doc(db, "users", opponentId); await updateDoc(opRef, { losses: increment(1) }); } } }
-  };
-
-  const handleCreateGame = async () => { if (!currentUser) return alert("Bạn cần đăng nhập!"); try { const docRef = await addDoc(collection(db, "games"), { pieces: initialBoardState, turn: 'r', history: [], chat: [], winner: null, winReason: null, drawRequest: null, redTime: INITIAL_GAME_TIME, blackTime: INITIAL_GAME_TIME, lastMoveTime: Date.now(), redPlayerId: currentUser.uid, redPlayerName: currentUser.displayName, status: 'waiting', createdAt: new Date() }); setGameId(docRef.id); setPlayerColor('r'); setGameMode('online'); alert(`Tạo phòng thành công!`); } catch (e) { console.error(e); alert("Lỗi tạo phòng!"); } };
-  const handleJoinGame = async (idInput) => { if (!currentUser) return alert("Bạn cần đăng nhập!"); const cleanId = idInput.trim(); if (!cleanId) return; try { const docRef = doc(db, "games", cleanId); const docSnap = await getDoc(docRef); if (docSnap.exists()) { const gameData = docSnap.data(); if (gameData.blackPlayerId && gameData.blackPlayerId !== currentUser.uid) { alert("Phòng đã đủ người!"); return; } if (!gameData.blackPlayerId) { await updateDoc(docRef, { blackPlayerId: currentUser.uid, blackPlayerName: currentUser.displayName, status: 'playing' }); } setGameId(cleanId); setPlayerColor('b'); setGameMode('online'); } else { alert("Không tìm thấy phòng!"); } } catch (e) { console.error(e); alert("Lỗi kết nối!"); } };
-  const handleSendMessage = async (text) => { if (!gameId || gameMode === 'ai') return; const senderName = currentUser ? currentUser.displayName : 'Khách'; const role = (playerColor === 'r' || playerColor === 'b') ? playerColor : 'spectator'; const newMessage = { sender: role, senderName: senderName, text: text, timestamp: Date.now() }; await updateDoc(doc(db, "games", gameId), { chat: [...chatMessages, newMessage] }); };
-  const handleDrawRequest = async () => { if (!gameId || winner || gameMode === 'ai') return; if (window.confirm("Bạn muốn gửi yêu cầu HÒA cho đối thủ?")) { const gameRef = doc(db, "games", gameId); await updateDoc(gameRef, { drawRequest: playerColor }); alert("Đã gửi yêu cầu! Vui lòng chờ đối thủ phản hồi."); } };
-  const handleAcceptDraw = () => { updateGameWinner('draw', 'draw'); setDrawReq(null); };
-  const handleRejectDraw = async () => { if (!gameId || gameMode === 'ai') return; const gameRef = doc(db, "games", gameId); await updateDoc(gameRef, { drawRequest: null }); setDrawReq(null); };
-
-  // --- HÀM CẬP NHẬT TRẠNG THÁI (ĐÃ BỔ SUNG) ---
+  // --- HÀM CẬP NHẬT TRẠNG THÁI GAME ---
   const updateGameState = async (newPieces, currentTurnPlaying, newHistoryEntry = null) => {
     const nextTurn = currentTurnPlaying === 'r' ? 'b' : 'r';
     
@@ -164,20 +64,166 @@ function App() {
     }
 
     if (gameId) {
-      const updateData = { pieces: newPieces, turn: nextTurn, redTime: redTime, blackTime: blackTime, lastMoveTime: Date.now() };
+      const gameRef = doc(db, "games", gameId);
+      const updateData = {
+        pieces: newPieces,
+        turn: nextTurn,
+        redTime: redTime, 
+        blackTime: blackTime,
+        lastMoveTime: Date.now()
+      };
       if (newHistoryEntry) updateData.history = [...history, newHistoryEntry];
-      await updateDoc(doc(db, "games", gameId), updateData);
+      await updateDoc(gameRef, updateData);
     }
   };
 
-  const createMoveLog = (piece, targetX, targetY) => { const letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']; return `${['Xe','Mã','Tượng','Sĩ','Tướng','Pháo','Tốt'][['r','n','b','a','k','c','p'].indexOf(piece.type)]} (${letters[piece.x]}${9-piece.y} → ${letters[targetX]}${9-targetY})`; };
-  
-  // --- HÀM PHÁT ÂM THANH (ĐÃ BỔ SUNG) ---
-  const playSound = (type) => {
-    if (isMuted) return;
-    const audio = new Audio(`/sounds/${type}.mp3`);
-    audio.play().catch(() => {});
+  // --- LOGIC AI (MÁY ĐI) ---
+  useEffect(() => {
+    if (gameMode === 'ai' && !winner && turn === 'b') {
+        const timer = setTimeout(() => {
+            const move = getBestMove(pieces, 'b');
+            if (move) {
+                const pieceToMove = pieces.find(p => p.id === move.fromId);
+                const isCapture = pieces.some(p => p.x === move.targetX && p.y === move.targetY);
+                executeMove(pieceToMove, move.targetX, move.targetY, isCapture);
+            } else {
+                updateGameWinner('r', 'checkmate');
+            }
+        }, 1000);
+        return () => clearTimeout(timer);
+    }
+  }, [turn, gameMode, winner, pieces]);
+
+  // --- FIREBASE SYNC ---
+  useEffect(() => {
+    if (!gameId || gameMode === 'ai') return;
+    const docRef = doc(db, "games", gameId);
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setPieces(data.pieces);
+        setTurn(data.turn);
+        setHistory(data.history || []);
+        setWinner(data.winner);
+        if (data.chat) setChatMessages(data.chat);
+        if (data.winReason) setWinReason(data.winReason);
+        if (data.drawRequest && data.drawRequest !== playerColor && !data.winner) { setDrawReq(data.drawRequest); } else { setDrawReq(null); }
+        serverData.current = { redTime: data.redTime || INITIAL_GAME_TIME, blackTime: data.blackTime || INITIAL_GAME_TIME, lastMoveTime: data.lastMoveTime || Date.now() };
+        syncTime();
+        if (isCheck(data.pieces, data.turn)) setMessage(`⚠️ ${data.turn === 'r' ? 'ĐỎ' : 'ĐEN'} ĐANG CHIẾU TƯỚNG!`); else setMessage("");
+      } else { alert("Phòng không tồn tại!"); leaveRoom(); }
+    });
+    return () => unsubscribe();
+  }, [gameId, playerColor, gameMode]);
+
+  const syncTime = () => {
+    if (!gameId || winner || gameMode === 'ai') return;
+    const now = Date.now();
+    const elapsed = Math.floor((now - serverData.current.lastMoveTime) / 1000);
+    if (turn === 'r') {
+      setRedTime(Math.max(0, serverData.current.redTime - elapsed));
+      setBlackTime(serverData.current.blackTime);
+      setCurrentMoveTime(Math.max(0, INITIAL_MOVE_TIME - elapsed));
+    } else {
+      setBlackTime(Math.max(0, serverData.current.blackTime - elapsed));
+      setRedTime(serverData.current.redTime);
+      setCurrentMoveTime(Math.max(0, INITIAL_MOVE_TIME - elapsed));
+    }
   };
+
+  useEffect(() => {
+    if (!gameId || winner || gameMode === 'ai') return;
+    const interval = setInterval(syncTime, 1000);
+    return () => clearInterval(interval);
+  }, [gameId, winner, turn, gameMode]);
+
+  // --- CÁC HÀM XỬ LÝ SỰ KIỆN ---
+  const handleLogin = async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const userRef = doc(db, "users", result.user.uid);
+      const userSnap = await getDoc(userRef);
+      if (!userSnap.exists()) {
+        await setDoc(userRef, { uid: result.user.uid, displayName: result.user.displayName, photoURL: result.user.photoURL, email: user.email, wins: 0, losses: 0 });
+      }
+      setCurrentUser(result.user);
+    } catch (e) { alert("Đăng nhập lỗi!"); }
+  };
+
+  const updateGameWinner = async (winnerColor, reason = "checkmate") => {
+    if (gameMode === 'ai') { setWinner(winnerColor); setWinReason(reason); return; }
+    if (gameId) {
+      const gameRef = doc(db, "games", gameId);
+      const gameSnap = await getDoc(gameRef);
+      if (gameSnap.data().winner) return;
+      await updateDoc(gameRef, { winner: winnerColor, winReason: reason, status: 'finished' });
+      if (winnerColor === 'draw') return;
+      const winId = winnerColor === 'r' ? gameSnap.data().redPlayerId : gameSnap.data().blackPlayerId;
+      const loseId = winnerColor === 'r' ? gameSnap.data().blackPlayerId : gameSnap.data().redPlayerId;
+      if (winId) updateDoc(doc(db, "users", winId), { wins: increment(1) });
+      if (loseId) updateDoc(doc(db, "users", loseId), { losses: increment(1) });
+    }
+  };
+
+  const handlePlayAI = () => {
+    setGameId("OFFLINE-AI"); setGameMode('ai'); setPlayerColor('r'); 
+    setPieces(initialBoardState); setTurn('r'); setWinner(null); setHistory([]); setChatMessages([]);
+    setRedTime(INITIAL_GAME_TIME); setBlackTime(INITIAL_GAME_TIME);
+  };
+
+  const resetGame = () => { 
+      setPieces(initialBoardState); setTurn('r'); setWinner(null); setWinReason(null); setMessage(""); setSelectedPiece(null); setHistory([]); setChatMessages([]); setRedTime(INITIAL_GAME_TIME); setBlackTime(INITIAL_GAME_TIME); setCurrentMoveTime(INITIAL_MOVE_TIME); setDrawReq(null); 
+      setGameMode('online'); setGameId(null); setPlayerColor(null);
+  };
+  
+  const leaveRoom = () => { resetGame(); };
+
+  // --- CÁC HÀM BỊ THIẾU TRƯỚC ĐÓ ĐÃ ĐƯỢC THÊM LẠI ---
+  const handleCreateGame = async () => {
+    if (!currentUser) return alert("Bạn cần đăng nhập!");
+    try {
+      const docRef = await addDoc(collection(db, "games"), {
+        pieces: initialBoardState, turn: 'r', history: [], chat: [], winner: null, winReason: null, drawRequest: null,
+        redTime: INITIAL_GAME_TIME, blackTime: INITIAL_GAME_TIME, lastMoveTime: Date.now(),
+        redPlayerId: currentUser.uid, redPlayerName: currentUser.displayName, status: 'waiting', createdAt: new Date()
+      });
+      setGameId(docRef.id); setPlayerColor('r'); setGameMode('online'); alert(`Tạo phòng thành công!`);
+    } catch (e) { console.error(e); alert("Lỗi tạo phòng!"); }
+  };
+
+  const handleJoinGame = async (idInput) => {
+    if (!currentUser) return alert("Bạn cần đăng nhập!");
+    const cleanId = idInput.trim(); if (!cleanId) return;
+    try {
+      const docRef = doc(db, "games", cleanId); const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const gameData = docSnap.data();
+        if (!gameData.blackPlayerId) { await updateDoc(docRef, { blackPlayerId: currentUser.uid, blackPlayerName: currentUser.displayName, status: 'playing' }); setPlayerColor('b'); } else if (gameData.redPlayerId === currentUser.uid) { setPlayerColor('r'); } else if (gameData.blackPlayerId === currentUser.uid) { setPlayerColor('b'); } else { setPlayerColor('spectator'); alert("Bạn đang xem với tư cách Khán giả."); } setGameId(cleanId); setGameMode('online');
+      } else { alert("Không tìm thấy phòng!"); }
+    } catch (e) { console.error(e); alert("Lỗi kết nối!"); }
+  };
+
+  const handleSendMessage = async (text) => {
+    if (!gameId || gameMode === 'ai') return;
+    const senderName = currentUser ? currentUser.displayName : 'Khách';
+    const role = (playerColor === 'r' || playerColor === 'b') ? playerColor : 'spectator';
+    const newMessage = { sender: role, senderName: senderName, text: text, timestamp: Date.now() };
+    await updateDoc(doc(db, "games", gameId), { chat: [...chatMessages, newMessage] });
+  };
+
+  const handleDrawRequest = async () => {
+      if (!gameId || winner || gameMode === 'ai') return;
+      if (window.confirm("Bạn muốn gửi yêu cầu HÒA cho đối thủ?")) {
+          const gameRef = doc(db, "games", gameId);
+          await updateDoc(gameRef, { drawRequest: playerColor });
+          alert("Đã gửi yêu cầu! Vui lòng chờ đối thủ phản hồi.");
+      }
+  };
+
+  const handleAcceptDraw = () => { updateGameWinner('draw', 'draw'); setDrawReq(null); };
+  const handleRejectDraw = async () => { if (!gameId || gameMode === 'ai') return; const gameRef = doc(db, "games", gameId); await updateDoc(gameRef, { drawRequest: null }); setDrawReq(null); };
+
+  const createMoveLog = (piece, targetX, targetY) => { const letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']; return `${['Xe','Mã','Tượng','Sĩ','Tướng','Pháo','Tốt'][['r','n','b','a','k','c','p'].indexOf(piece.type)]} (${letters[piece.x]}${9-piece.y} → ${letters[targetX]}${9-targetY})`; };
 
   const executeMove = (piece, targetX, targetY, isCapture) => { 
       const moveText = createMoveLog(piece, targetX, targetY); 
@@ -212,7 +258,7 @@ function App() {
       {!gameId ? (
         <Lobby onCreateGame={handleCreateGame} onJoinGame={handleJoinGame} user={userStats || currentUser} onLogin={handleLogin} onPlayAI={handlePlayAI} />
       ) : (
-        <div className="flex flex-col lg:flex-row gap-4 lg:gap-8 items-center lg:items-start animate-fade-in w-full max-w-6xl px-2">
+        <div className="flex flex-col lg:flex-row gap-4 lg:gap-8 items-center lg:items-start w-full max-w-6xl px-2 animate-fade-in">
           
           <div className="relative flex flex-col items-center">
             <div className="mb-2 flex flex-wrap justify-between items-center w-full" style={{ maxWidth: boardWidth }}>
@@ -234,7 +280,6 @@ function App() {
 
             {!winner && (
                 <div className="flex gap-2 mt-4 w-full justify-center" style={{ maxWidth: boardWidth }}>
-                    {/* NÚT CHỨC NĂNG (Ẩn Cầu Hòa khi chơi với AI) */}
                     <button onClick={() => { if (window.confirm("Xin thua?")) { const opponent = playerColor === 'r' ? 'b' : 'r'; updateGameWinner(opponent, 'resign'); } }} className="flex-1 bg-red-900/80 hover:bg-red-800 text-red-100 font-bold py-2 rounded border border-red-700 text-sm">🏳️ Xin Thua</button>
                     {gameMode !== 'ai' && <button onClick={handleDrawRequest} className="flex-1 bg-slate-700 hover:bg-slate-600 text-gray-300 font-bold py-2 rounded border border-slate-500 text-sm">🤝 Cầu Hòa</button>}
                 </div>
