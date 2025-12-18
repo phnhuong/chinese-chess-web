@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import Leaderboard from './Leaderboard'; 
 import RoomList from './RoomList';
 
-// Nhận thêm prop: onPlayAI
-const Lobby = ({ onCreateGame, onJoinGame, user, onLogin, onPlayAI }) => {
+// Nhận props showInstallButton và onInstallApp
+const Lobby = ({ onCreateGame, onJoinGame, user, onLogin, onPlayAI, showInstallButton, onInstallApp }) => {
   const [joinId, setJoinId] = useState("");
 
   if (!user) {
@@ -15,6 +15,14 @@ const Lobby = ({ onCreateGame, onJoinGame, user, onLogin, onPlayAI }) => {
           <span className="text-xl font-bold text-blue-600">G</span>
           Đăng nhập bằng Google
         </button>
+        
+        {/* NÚT CÀI ĐẶT APP (CHỈ HIỆN KHI TRÌNH DUYỆT CHO PHÉP) */}
+        {showInstallButton && (
+            <button onClick={onInstallApp} className="mt-4 text-gray-400 underline hover:text-white text-sm">
+                📲 Cài đặt App về máy
+            </button>
+        )}
+        
         <Leaderboard />
       </div>
     );
@@ -37,12 +45,10 @@ const Lobby = ({ onCreateGame, onJoinGame, user, onLogin, onPlayAI }) => {
                 </div>
             </div>
 
-            <div className="w-full flex gap-3">
+            <div className="w-full flex gap-2">
                 <button onClick={onCreateGame} className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold text-lg rounded-lg shadow-lg transition-transform active:scale-95 flex justify-center items-center gap-2">
                     <span>⚔️</span> TẠO PHÒNG
                 </button>
-                
-                {/* NÚT CHƠI VỚI MÁY (MỚI) */}
                 <button onClick={onPlayAI} className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-lg rounded-lg shadow-lg transition-transform active:scale-95 flex justify-center items-center gap-2">
                     <span>🤖</span> LUYỆN TẬP
                 </button>
@@ -55,6 +61,13 @@ const Lobby = ({ onCreateGame, onJoinGame, user, onLogin, onPlayAI }) => {
                     <button onClick={() => onJoinGame(joinId)} disabled={!joinId} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-600 text-white font-bold rounded text-sm shadow">VÀO</button>
                 </div>
             </div>
+
+            {/* NÚT CÀI ĐẶT APP (CHO USER ĐÃ LOGIN) */}
+            {showInstallButton && (
+                <button onClick={onInstallApp} className="w-full py-2 border border-slate-500 text-slate-300 rounded hover:bg-slate-600 transition-colors text-sm">
+                    📲 Cài đặt App về màn hình chính
+                </button>
+            )}
 
             <RoomList onJoinRoom={onJoinGame} />
         </div>
